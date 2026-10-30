@@ -41,12 +41,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yanyoo2000/ZWCAD-2D-MCP.git"
+    "url": "git+https://github.com/yanyoo2000/ZWCAD-MCP.git"
   },
   "bugs": {
-    "url": "https://github.com/yanyoo2000/ZWCAD-2D-MCP/issues"
+    "url": "https://github.com/yanyoo2000/ZWCAD-MCP/issues"
   },
-  "homepage": "https://github.com/yanyoo2000/ZWCAD-2D-MCP#readme",
+  "homepage": "https://github.com/yanyoo2000/ZWCAD-MCP#readme",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
