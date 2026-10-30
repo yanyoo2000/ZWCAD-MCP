@@ -1,0 +1,16 @@
+# 统一用 LF。Windows 上用 CRLF 会让 Python 脚本在 Linux CI 或容器里带 \r，
+# 也可能导致 shell 脚本执行失败（bad interpreter）。
+* text=auto eol=lf
+
+# Python / JS / Markdown / JSON 一律 LF
+*.py    text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.toml  text eol=lf
+*.txt   text eol=lf
+
+# 二进制
+*.png   binary
+*.tgz   binary
