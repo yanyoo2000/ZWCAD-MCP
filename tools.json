@@ -1,0 +1,1323 @@
+[
+ {
+  "name": "zwcad_draw_entity",
+  "description": "绘制2D实体。entity_type及params([]=可选):\nline:{x1,y1,x2,y2,[z1,z2]} | circle:{center_x,center_y,radius,[center_z]}\narc:{center_x,center_y,radius,start_angle,end_angle}(弧度)\nellipse:{center_x,center_y,major_axis_x,major_axis_y,radius_ratio}\nlwpolyline:{vertices:[[x,y],...]，[closed]} | polyline:{vertices:[[x,y,z],...]，[closed]}\nspline:{fit_points:[[x,y,z],...]} | point:{x,y,[z]}\nray/xline:{x1,y1,x2,y2} | mline/3d_polyline:{vertices:[[x,y,z],...]}",
+  "inputSchema": {
+   "properties": {
+    "entity_type": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "type": "object"
+    },
+    "layer": {
+     "default": "0",
+     "type": "string"
+    }
+   },
+   "required": [
+    "entity_type",
+    "params"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_draw_batch",
+  "description": "批量绘制多个实体，减少交互轮次。entities为dict列表，每个dict含entity_type和params，可选layer。\n示例: [{\"entity_type\":\"line\",\"params\":{\"x1\":0,\"y1\":0,\"x2\":10,\"y2\":10}},{\"entity_type\":\"circle\",\"params\":{\"center_x\":5,\"center_y\":5,\"radius\":3}}]",
+  "inputSchema": {
+   "properties": {
+    "entities": {
+     "items": {},
+     "type": "array"
+    },
+    "layer": {
+     "default": "0",
+     "type": "string"
+    }
+   },
+   "required": [
+    "entities"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_draw_3d_solid",
+  "description": "绘制3D实体。solid_type及params([]=可选):\nbox:{origin_x,origin_y,origin_z,length,width,height}\ncylinder:{center_x,center_y,center_z,radius,height}\ncone:{center_x,center_y,center_z,base_radius,height}\nsphere:{center_x,center_y,center_z,radius}\ntorus:{center_x,center_y,center_z,torus_radius,tube_radius}\nwedge:{center_x,center_y,center_z,length,width,height}\n3d_face:{x1,y1,z1,x2,y2,z2,x3,y3,z3,[x4,y4,z4]}",
+  "inputSchema": {
+   "properties": {
+    "solid_type": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "type": "object"
+    },
+    "layer": {
+     "default": "0",
+     "type": "string"
+    }
+   },
+   "required": [
+    "solid_type",
+    "params"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_add_annotation",
+  "description": "添加注释对象。annotation_type及params([]=可选):\ntext:{text,x,y,[z,height]} | mtext:{text,x,y,[z,width,height]}\nleader:{points:[[x,y,z],...]，[annotation_type:0/1/2]}\ntolerance:{text,x,y,[z,dir_x,dir_y,dir_z]}\nmleader:{points:[[x,y,z],...]，[text,text_height]}\nhatch:{pattern_name,[pattern_type,pattern_scale,pattern_angle]}\ntable:{x,y,rows,cols,row_height,col_width}",
+  "inputSchema": {
+   "properties": {
+    "annotation_type": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "type": "object"
+    },
+    "layer": {
+     "default": "0",
+     "type": "string"
+    }
+   },
+   "required": [
+    "annotation_type",
+    "params"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_add_dimension",
+  "description": "添加标注。dim_type及params(z坐标均可选):\naligned:{x1,y1,x2,y2,text_x,text_y}\nrotated:{x1,y1,x2,y2,text_x,text_y,rotation_angle}\ndiametric:{chord_x,chord_y,far_chord_x,far_chord_y,leader_length}\nradial:{center_x,center_y,chord_x,chord_y,leader_length}\nangular:{vertex_x,vertex_y,first_x,first_y,second_x,second_y,text_x,text_y}\nordinate:{def_x,def_y,leader_x,leader_y,use_x_axis}\n\n所有类型均可附加公差/配合参数(可选):\ntolerance_display: none|symmetrical(对称)|deviation(偏差)|limits(极限)|basic(基本) 或 0-4\nupper_deviation/lower_deviation: 上/下偏差(带符号, 如 0.021 / -0.05)\ntolerance_precision: 公差小数位数0-8 | tolerance_height_scale: 公差字高系数(GB常用0.7)\nfit_symbol: 配合代号如 \"H7\"、\"H7/g6\"(含\"/\"或\"^\"时默认堆叠为分数, fit_stacked=False则平排)\nfit_height_scale: 配合代号字高系数(默认0.7)\ntext_prefix/text_suffix/text_override: 标注文字前缀/后缀/替代(\"<>\"表示测量值)\n示例: 直径50H7孔 -> dim_type=diametric, fit_symbol=\"H7\"; 50(+0.021/0) -> tolerance_display=\"deviation\", upper_deviation=0.021, lower_deviation=0",
+  "inputSchema": {
+   "properties": {
+    "dim_type": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "type": "object"
+    },
+    "layer": {
+     "default": "0",
+     "type": "string"
+    }
+   },
+   "required": [
+    "dim_type",
+    "params"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_query_dimensions",
+  "description": "快速查询当前图纸中所有标注(尺寸)信息。\n优先使用原生 DXF 选择过滤器，\n过滤失败时回退到 iter_objects 子串匹配。\n\n参数:\n- detail: summary(默认, 返回关键信息) | full(返回完整属性, 含公差/文字位置/几何点等)\n- layer: 可选, 仅查询指定图层的标注; 为空则查询全部图层\n\n返回:\n- total: 标注总数\n- summary: 按类型/是否有公差/是否有文字覆盖 的统计\n- data: 标注列表, 每项含 handle/type/type_cn/layer/measurement/measurement_unit/\n        text_override/text_string/style_name 等(full 模式额外含公差与几何信息)",
+  "inputSchema": {
+   "properties": {
+    "detail": {
+     "default": "summary",
+     "type": "string"
+    },
+    "layer": {
+     "default": null,
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_insert_block",
+  "description": "在指定位置插入图块。rotation为弧度。",
+  "inputSchema": {
+   "properties": {
+    "block_name": {
+     "type": "string"
+    },
+    "x": {
+     "type": "number"
+    },
+    "y": {
+     "type": "number"
+    },
+    "z": {
+     "default": 0,
+     "type": "number"
+    },
+    "x_scale": {
+     "default": 1.0,
+     "type": "number"
+    },
+    "y_scale": {
+     "default": 1.0,
+     "type": "number"
+    },
+    "z_scale": {
+     "default": 1.0,
+     "type": "number"
+    },
+    "rotation": {
+     "default": 0,
+     "type": "number"
+    },
+    "layer": {
+     "default": "0",
+     "type": "string"
+    }
+   },
+   "required": [
+    "block_name",
+    "x",
+    "y"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_transform_entity",
+  "description": "对实体执行变换操作。通过handle(优先)或object_type+property_name+property_value定位实体。\naction及params([]=可选):\ncopy:{from_x,from_y,to_x,to_y,[z]} | move:{from_x,from_y,to_x,to_y,[z]}\nrotate:{base_x,base_y,angle}(弧度) | mirror:{x1,y1,x2,y2}\nscale:{base_x,base_y,factor} | delete:{}\narray_polar:{center_x,center_y,count,[fill_angle]}\narray_rectangular:{num_rows,num_cols,row_spacing,col_spacing}",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "type": "object"
+    },
+    "object_type": {
+     "default": null,
+     "type": "string"
+    },
+    "property_name": {
+     "default": null,
+     "type": "string"
+    },
+    "property_value": {
+     "default": null,
+     "type": "string"
+    },
+    "handle": {
+     "default": null,
+     "type": "string"
+    }
+   },
+   "required": [
+    "action",
+    "params"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_modify_entity",
+  "description": "修改实体几何属性。定位参数同transform_entity。entity_type及params(均可选除特别说明):\ncircle:{radius,center_x,center_y,center_z}\narc:{radius,center_x,center_y,start_angle,end_angle}\nline:{x1,y1,z1,x2,y2,z2} | text:{text,height,rotation,stylename,x,y}\nmtext:{text,height,width,rotation,attachment_point}\npolyline:{closed,constant_width,elevation} | spline:{closed,fit_tolerance,start_tangent_x/y,end_tangent_x/y}\ndimension:{tolerance_display,upper_deviation,lower_deviation,tolerance_precision,\ntolerance_height_scale,fit_symbol,fit_stacked,fit_height_scale,text_prefix/suffix/override}(均同add_dimension的公差/配合参数)\noffset:{distance}(必需) | explode:{}",
+  "inputSchema": {
+   "properties": {
+    "entity_type": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "type": "object"
+    },
+    "object_type": {
+     "default": null,
+     "type": "string"
+    },
+    "property_name": {
+     "default": null,
+     "type": "string"
+    },
+    "property_value": {
+     "default": null,
+     "type": "string"
+    },
+    "handle": {
+     "default": null,
+     "type": "string"
+    }
+   },
+   "required": [
+    "entity_type",
+    "params"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_get_entity_info",
+  "description": "获取实体详细信息（属性、几何数据、边界框）。定位参数同transform_entity。",
+  "inputSchema": {
+   "properties": {
+    "handle": {
+     "default": null,
+     "type": "string"
+    },
+    "object_type": {
+     "default": null,
+     "type": "string"
+    },
+    "property_name": {
+     "default": null,
+     "type": "string"
+    },
+    "property_value": {
+     "default": null,
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_set_entity_properties",
+  "description": "设置实体通用属性（layer/color/linetype等）。定位参数同transform_entity。",
+  "inputSchema": {
+   "properties": {
+    "layer": {
+     "default": null,
+     "type": "string"
+    },
+    "color": {
+     "default": null,
+     "type": "integer"
+    },
+    "linetype": {
+     "default": null,
+     "type": "string"
+    },
+    "linetype_scale": {
+     "default": null,
+     "type": "number"
+    },
+    "lineweight": {
+     "default": null,
+     "type": "number"
+    },
+    "visible": {
+     "default": null,
+     "type": "boolean"
+    },
+    "object_type": {
+     "default": null,
+     "type": "string"
+    },
+    "property_name": {
+     "default": "Layer",
+     "type": "string"
+    },
+    "property_value": {
+     "default": "",
+     "type": "string"
+    },
+    "handle": {
+     "default": null,
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_find_object",
+  "description": "查找符合条件的第一个对象。定位参数同transform_entity。\n优先 handle(O(1)) > 原生DXF过滤 > 类型预过滤+小批量谓词。结果回传handle便于后续直接定位。",
+  "inputSchema": {
+   "properties": {
+    "object_type": {
+     "default": null,
+     "type": "string"
+    },
+    "property_name": {
+     "default": null,
+     "type": "string"
+    },
+    "property_value": {
+     "default": null,
+     "type": "string"
+    },
+    "handle": {
+     "default": null,
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_get_objects_in_model",
+  "description": "获取模型空间中的对象列表。object_type可选过滤，limit默认500。\n优先使用原生 DXF 选择过滤器；类型不可映射时回退迭代。",
+  "inputSchema": {
+   "properties": {
+    "object_type": {
+     "default": null,
+     "type": "string"
+    },
+    "limit": {
+     "default": 500,
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_zoom",
+  "description": "视图缩放。mode: extents|all|previous(无需params),\nwindow:{x1,y1,x2,y2}, center:{center_x,center_y,[magnify]},\nscale:{scale,[scale_type:0全图/1当前]}",
+  "inputSchema": {
+   "properties": {
+    "mode": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "default": null,
+     "type": "object"
+    }
+   },
+   "required": [
+    "mode"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_manage_style",
+  "description": "管理图层/线型/文字样式/标注样式。style_type: layer|linetype|textstyle|dimstyle\naction: list|add|set_active|set_properties。properties按style_type不同:\nlayer: {color,linetype,on,locked,freeze}\ntextstyle: {font_file,big_font_file,height,width,oblique_angle}\nlinetype add: {filename}(默认acad.lin)",
+  "inputSchema": {
+   "properties": {
+    "style_type": {
+     "type": "string"
+    },
+    "action": {
+     "type": "string"
+    },
+    "name": {
+     "default": null,
+     "type": "string"
+    },
+    "properties": {
+     "type": "object",
+     "additionalProperties": true,
+     "default": null
+    }
+   },
+   "required": [
+    "style_type",
+    "action"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_manage_view",
+  "description": "管理布局和视图。action: list_layouts|get_active_layout|add_layout|set_active_layout|list_views|add_view\n|set_active_space|get_active_space。\nadd/set_active/需要name参数。\nset_active_space的params:{space:\"model\"|\"paper\"}。",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "name": {
+     "default": null,
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "default": null,
+     "type": "object"
+    }
+   },
+   "required": [
+    "action"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_manage_document",
+  "description": "文档管理。action及params:\nnew(无需params) | save:{file_path} | close:{[save_changes]}\ninfo/list(无需params) | activate:{name}\nexport:{filename,[extension]} | import:{filename,[x,y,z,scale_factor]}\nplot:{plot_file,[plot_config]}\nregen:{[scope:0=AllViewports/1=ActiveViewport]}\nstart_undo/end_undo(无需params)\nwblock:{file_name,[selection_set_name]}",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "default": null,
+     "type": "object"
+    }
+   },
+   "required": [
+    "action"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_manage_table",
+  "description": "操作CAD表格对象。定位参数同transform_entity。action及params:\nset_cell:{row,col,text} | get_cell:{row,col}\ninsert_rows:{row_index,[count,height]} | delete_rows:{row_index,[count]}\nset_column_width:{col,width} | set_row_height:{row,height}\nmerge_cells:{min_row,max_row,min_col,max_col}",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "type": "object"
+    },
+    "object_type": {
+     "default": null,
+     "type": "string"
+    },
+    "property_name": {
+     "default": null,
+     "type": "string"
+    },
+    "property_value": {
+     "default": null,
+     "type": "string"
+    },
+    "handle": {
+     "default": null,
+     "type": "string"
+    }
+   },
+   "required": [
+    "action",
+    "params"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_select_entities",
+  "description": "选择集操作。action及params:\nselect:{mode}(0=Window/1=Crossing需{x1,y1,x2,y2},2=Previous/4=Last/5=All无需坐标,[name,filter,return_items])\nby_polygon:{mode(0=Fence/1=WinPoly/2=CrossPoly),points,[name,filter,return_items]}\nget_items:{[name,max_items]} | get_picked:{[max_items]}\nlist/clear/delete:{[name]}\nfilter字段(原生DXF过滤,支持多条件组合): {entity_type,dimstyle,layer,color,linetype,textstyle,block_name,visible,space}\nentity_type支持LINE/CIRCLE/TEXT等标准名或AcDb前缀(自动归一化)",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "default": null,
+     "type": "object"
+    }
+   },
+   "required": [
+    "action"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_manage_block",
+  "description": "图块管理。action: list|info(需name)|create(需name,[x,y,z])|get_attributes(定位参数同transform_entity)。",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "name": {
+     "default": null,
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "default": null,
+     "type": "object"
+    },
+    "object_type": {
+     "default": null,
+     "type": "string"
+    },
+    "property_name": {
+     "default": null,
+     "type": "string"
+    },
+    "property_value": {
+     "default": null,
+     "type": "string"
+    },
+    "handle": {
+     "default": null,
+     "type": "string"
+    }
+   },
+   "required": [
+    "action"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_get_variable",
+  "description": "获取系统变量值（如DIMSCALE, LTSCALE, OSMODE等）。",
+  "inputSchema": {
+   "properties": {
+    "name": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "name"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_set_variable",
+  "description": "设置系统变量值。",
+  "inputSchema": {
+   "properties": {
+    "name": {
+     "type": "string"
+    },
+    "value": {
+     "title": "Value"
+    }
+   },
+   "required": [
+    "name",
+    "value"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_get_app_info",
+  "description": "获取应用信息。scope: cad(ZWCAD版本/路径/窗口)|mech_version|mech_cad_path|mech_zwm_path|mech_style_path|mech_about",
+  "inputSchema": {
+   "properties": {
+    "scope": {
+     "default": "cad",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_mech_diagnose",
+  "description": "诊断机械模块连接与 ZwmToolKit 类型库加载状态。\n\n逐项探测：类型库加载、ZWCAD 应用、ZwmApp、ZwmDb、标题栏获取(依赖类型库)，返回各探测项状态与修复建议。",
+  "inputSchema": {
+   "properties": {},
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_mech_manage_title_block",
+  "description": "标题栏管理。action: get_info|get_field_count(无需params),\nset_field:{field_name,value} | update_batch:{fields:{name:val,...}}\nget_field_by_index:{index}",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "default": null,
+     "type": "object"
+    }
+   },
+   "required": [
+    "action"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_mech_manage_frame",
+  "description": "图框管理。action: list|get_info|get_count|get_next_name|refresh(无需params),\nget_name_by_index:{index} | get_name_by_point:{x,y,[z]}\nswitch:{frame_name} | update:{width,height,orientation,scale1,scale2,...}",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "default": null,
+     "type": "object"
+    }
+   },
+   "required": [
+    "action"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_mech_manage_bom",
+  "description": "明细表(BOM)管理。action及params:\nget_row_count/refresh(无需params)\nget_row:{row_index} | add_row:{data:{name:val,...}}\nupdate_row:{row_index,data:{...}} | insert_row:{index,data:{...}}\ndelete_row:{index} | set_field:{row_index,field_key,value}\nget_field:{row_index,field_index} | get_field_count:{row_index}\nbatch_update:{rows:[{row_index,data:{...}},...]}\n\n持久化说明: 修改BOM数据后，内部自动调用refresh_bom()将更改写入DWG图纸。\n请勿在BOM修改后调用zwcad_mech_manage_db的save操作，save会从图纸重载数据导致修改丢失。\n如需保存DWG文件到磁盘，请使用zwcad_manage_document的save操作。",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "default": null,
+     "type": "object"
+    }
+   },
+   "required": [
+    "action"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_mech_create_partlist",
+  "description": "创建明细表实体。通过向命令行发送 ZwmPartlist 命令实现。\n\n当图纸中尚无明细表时调用此工具创建。参考官方SDK FormBom.cs，\n命令格式为 _.ZwmPartlist（下划线=语言无关，点=强制内置命令）。",
+  "inputSchema": {
+   "properties": {},
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_mech_manage_db",
+  "description": "机械模块数据库操作。action: open({[file_path]})|save({[flag]})|close。\n\n注意: save操作用于保存机械模块数据库到文件，其参数dwgVer为图纸版本号(默认33)。\n修改BOM/标题栏/图框后请使用各自的refresh方法(如zwcad_mech_manage_bom的refresh)持久化，\n不要调用save，因为save会从图纸重载数据导致修改丢失。",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "default": null,
+     "type": "object"
+    }
+   },
+   "required": [
+    "action"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_mech_doc",
+  "description": "中望机械文档操作。action: open|new|new_named(需template参数)。",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "file_path": {
+     "type": "string"
+    },
+    "template": {
+     "default": null,
+     "type": "string"
+    }
+   },
+   "required": [
+    "action",
+    "file_path"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_mech_cad_environment_init",
+  "description": "初始化CAD环境标准（如GB, ISO, DIN等）。",
+  "inputSchema": {
+   "properties": {
+    "std_name": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "std_name"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_mech_get_balloon",
+  "description": "获取球标对象（用于零件序号标注）。",
+  "inputSchema": {
+   "properties": {
+    "text": {
+     "default": "",
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_mech_insert_balloon",
+  "description": "插入球标（零件序号标注）。通过向命令行发送 LISP 命令 Zwm_BalloonInsert 实现。\n\n参数:\n- arrow_x/y/z: 箭头位置坐标\n- symbol_x/y/z: 标注符号位置坐标\n- text: 球标文字内容\n- seq_type: 序号类型 0-6，对应前7种序号类型\n- has_leader: 是否带引线 (True=带引线, False=不带引线)\n- mode: 球标插入模式（LISP 列表首元素），默认 0\n\nLISP 命令格式:\n(Zwm_BalloonInsert (list <mode> (list ax ay az) (list sx sy sz) \"text\" seq_type leader))",
+  "inputSchema": {
+   "properties": {
+    "arrow_x": {
+     "default": 100.0,
+     "type": "number"
+    },
+    "arrow_y": {
+     "default": 100.0,
+     "type": "number"
+    },
+    "arrow_z": {
+     "default": 0.0,
+     "type": "number"
+    },
+    "symbol_x": {
+     "default": 155.0,
+     "type": "number"
+    },
+    "symbol_y": {
+     "default": 155.0,
+     "type": "number"
+    },
+    "symbol_z": {
+     "default": 0.0,
+     "type": "number"
+    },
+    "text": {
+     "default": "3",
+     "type": "string"
+    },
+    "seq_type": {
+     "default": 2,
+     "type": "integer"
+    },
+    "has_leader": {
+     "default": false,
+     "type": "boolean"
+    },
+    "mode": {
+     "default": 0,
+     "type": "integer"
+    }
+   },
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_mech_create_frame",
+  "description": "新建图幅/图框。所有参数均可选，默认从XML配置读取。\norientation: landscape|portrait。have_*: 各栏开关(dhl/fjl/btl/csl/ggl)。",
+  "inputSchema": {
+   "properties": {
+    "std_name": {
+     "default": null,
+     "type": "string"
+    },
+    "frame_size_name": {
+     "default": null,
+     "type": "string"
+    },
+    "orientation": {
+     "default": "landscape",
+     "type": "string"
+    },
+    "width": {
+     "default": 0.0,
+     "type": "number"
+    },
+    "height": {
+     "default": 0.0,
+     "type": "number"
+    },
+    "scale1": {
+     "default": 1.0,
+     "type": "number"
+    },
+    "scale2": {
+     "default": 1.0,
+     "type": "number"
+    },
+    "title_style_name": {
+     "default": null,
+     "type": "string"
+    },
+    "bom_style_name": {
+     "default": null,
+     "type": "string"
+    },
+    "dhl_style_name": {
+     "default": "图样代号",
+     "type": "string"
+    },
+    "fjl_style_name": {
+     "default": "附加栏",
+     "type": "string"
+    },
+    "csl_style_name": {
+     "default": "包络环面蜗杆",
+     "type": "string"
+    },
+    "ggl_style_name": {
+     "default": "",
+     "type": "string"
+    },
+    "frame_style_name": {
+     "default": null,
+     "type": "string"
+    },
+    "have_dhl": {
+     "default": false,
+     "type": "boolean"
+    },
+    "have_fjl": {
+     "default": false,
+     "type": "boolean"
+    },
+    "have_btl": {
+     "default": true,
+     "type": "boolean"
+    },
+    "have_csl": {
+     "default": false,
+     "type": "boolean"
+    },
+    "have_ggl": {
+     "default": false,
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_manage_dictionary",
+  "description": "命名对象字典与XRecord管理。action及params:\nlist(无需params) — 列出所有顶层字典\nadd:{name} — 创建新字典\nget_items:{name} — 获取字典内所有条目(keyword→ObjectName映射)\nadd_object:{dict_name,keyword,object_name} — 向字典添加对象\nget_object:{dict_name,name} — 按名称获取条目\nremove:{dict_name,name} — 删除条目\nrename:{dict_name,old_name,new_name} — 重命名条目\nadd_xrecord:{dict_name,keyword} — 在字典中创建XRecord\nget_xrecord:{dict_name,keyword} — 读取XRecord数据(返回types+values数组)\nset_xrecord:{dict_name,keyword,data_types:[],data_values:[]} — 写入XRecord(types为DXF组码)\nget_entity_dict:{handle} — 获取实体的扩展字典\nhas_entity_dict:{handle} — 检查实体是否有扩展字典",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "default": null,
+     "type": "object"
+    }
+   },
+   "required": [
+    "action"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_manage_xdata",
+  "description": "扩展数据(XData)管理。action及params:\nlist_apps(无需params) — 列出所有已注册应用程序名\nregister_app:{app_name} — 注册新应用程序名(写XData前必须先注册)\nget_xdata:{handle,app_name} — 读取实体扩展数据(返回types+values)\nset_xdata:{handle,data_types:[],data_values:[]} — 写入扩展数据\n  types[0]必须是1001(应用名标识),values[0]是已注册的app_name\n  常用类型码: 1000=字符串,1040=实数,1070=整数,1010=3D点\ndelete_xdata:{handle,app_name} — 删除实体上指定应用的扩展数据",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "default": null,
+     "type": "object"
+    }
+   },
+   "required": [
+    "action"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_manage_utility",
+  "description": "CAD工具方法(doc.Utility)。action及params:\ntranslate_coordinates:{point:[x,y,z],from_system:int,to_system:int,[displacement:bool]}\n  坐标系: 0=WCS, 1=UCS, 2=DisplayDCS, 3=PaperSpaceDCS\npolar_point:{point:[x,y,z],angle:float,distance:float} — 计算极坐标点\nangle_to_real:{angle_str,unit:int} — 角度字符串转弧度\n  unit: 0=度, 1=度分秒, 2=弧度, 3=百分度, 4=勘测单位\nangle_to_string:{angle:float,unit:int,precision:int} — 弧度转角度字符串\nreal_to_string:{value:float,unit:int,precision:int} — 实数转字符串\n  unit: 1=科学, 2=小数, 3=工程, 4=建筑, 5=分数\ndistance_to_real:{distance_str,unit:int} — 距离字符串转实数\nprompt:{message} — 在命令行显示消息\nget_object_id_string:{handle,[hex:bool]} — 获取实体ObjectID",
+  "inputSchema": {
+   "properties": {
+    "action": {
+     "type": "string"
+    },
+    "params": {
+     "additionalProperties": true,
+     "default": null,
+     "type": "object"
+    }
+   },
+   "required": [
+    "action"
+   ],
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_get_capabilities",
+  "description": "查看统一 MCP 当前可用的产品、连接状态、工具组和活动图纸。",
+  "inputSchema": {
+   "properties": {
+    "probe_cad": {
+     "default": true,
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ },
+ {
+  "name": "zwcad_diagnose",
+  "description": "诊断平台和机械后端，并给出不修改系统的排障建议。",
+  "inputSchema": {
+   "properties": {
+    "probe_cad": {
+     "default": true,
+     "type": "boolean"
+    }
+   },
+   "type": "object"
+  },
+  "outputSchema": {
+   "additionalProperties": true,
+   "type": "object"
+  },
+  "_meta": {
+   "_fastmcp": {
+    "tags": []
+   }
+  }
+ }
+]

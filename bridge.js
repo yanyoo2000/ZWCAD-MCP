@@ -91,12 +91,16 @@ function fatal(err) {
 
 /**
  * 同步执行并捕获 stdout，失败返回 null（用于探测，不抛异常）。
+ *
+ * 超时给得比较宽松：Windows 上首次启动 python.exe 可能被杀毒软件扫描，
+ * 实测出现过同一路径偶发 20 秒超时被误判为「不可用」的情况。
+ * 探测失败会直接导致挑不到可用解释器，代价远大于多等几秒。
  */
 function tryRun(exe, args, options) {
   try {
     const r = spawnSync(exe, args, {
       encoding: 'utf8',
-      timeout: 20000,
+      timeout: 60000,
       windowsHide: true,
       ...options,
     });
@@ -136,12 +140,23 @@ function runStreaming(exe, args, label) {
 
 /**
  * 返回 Python 主次版本号，例如 [3, 13]；不可用返回 null。
+ *
+ * 失败时重试一次：Windows 上 python.exe 首次启动偶尔会异常缓慢
+ * （杀毒软件扫描、磁盘繁忙），直接判死会让本可用的解释器被跳过。
  */
 function pythonVersion(exe) {
-  const out = tryRun(exe, ['-c', 'import sys;print("%d.%d"%sys.version_info[:2])']);
-  if (!out) return null;
-  const m = /^(\d+)\.(\d+)$/.exec(out);
-  return m ? [Number(m[1]), Number(m[2])] : null;
+  const probe = () => {
+    const out = tryRun(exe, ['-c', 'import sys;print("%d.%d"%sys.version_info[:2])']);
+    if (!out) return null;
+    const m = /^(\d+)\.(\d+)$/.exec(out);
+    return m ? [Number(m[1]), Number(m[2])] : null;
+  };
+
+  const first = probe();
+  if (first) return first;
+
+  // 一次失败不足以断定不可用，再试一次
+  return probe();
 }
 
 function versionAtLeast(ver, min) {
@@ -398,78 +413,38 @@ async function prepareRuntime() {
 }
 
 /* ------------------------------------------------------------------ *
- * 启动 MCP Server
+ * 启动（代理模式）
  * ------------------------------------------------------------------ */
 
 /**
- * 启动 MCP Server 并保持管道转发。
+ * 以代理模式启动：立即完成 MCP 握手，Python 运行时在后台准备。
  *
- * 返回 Promise<{code, fastExit, hadOutput}>：
- * - fastExit：进程在 15 秒内就退出（通常意味着环境损坏 / 依赖缺失）
- * - hadOutput：退出前是否已在 stdout 上产生过 MCP 消息
+ * 这样首次使用（需安装约 90 个 Python 依赖，实测 40~70 秒）也不会
+ * 触发客户端的 initialize 超时（通常 30 秒）。
  *
- * 只有「快速退出且没有任何输出」才值得自动修复重试，否则视为正常结束。
+ * 具体协议处理见 lib/proxy.js。
  */
-function startServer(venvPython) {
-  const env = {
-    ...process.env,
-    PYTHONUTF8: '1',
-    PYTHONIOENCODING: 'utf-8',
-  };
+function startWithProxy() {
+  const { createProxy } = require('./lib/proxy');
+  createProxy({
+    cwd: CONNECTOR_DIR,
+    version: pkgVersion(),
+    childArgs: ['-m', ENTRY_MODULE],
+    log,
+    ensureRuntime: async () => {
+      // 每次都要重新探测：用户可能刚装了 Python 或修好了环境
+      const py = await prepareRuntime();
+      return py;
+    },
+  });
+}
 
-  const src = vendoredSrcOrNull();
-  if (src) {
-    env.PYTHONPATH = env.PYTHONPATH ? src + path.delimiter + env.PYTHONPATH : src;
+function pkgVersion() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(CONNECTOR_DIR, 'package.json'), 'utf8')).version;
+  } catch {
+    return '0.0.0';
   }
-
-  log('启动 MCP Server…');
-  const startedAt = Date.now();
-  let hadOutput = false;
-
-  const child = spawn(venvPython, ['-m', ENTRY_MODULE], {
-    stdio: ['pipe', 'pipe', 'pipe'],
-    env,
-    windowsHide: true,
-  });
-
-  // 双向转发：stdout 是 MCP 协议通道，必须原样透传
-  child.stdout.on('data', (chunk) => {
-    hadOutput = true;
-    process.stdout.write(chunk);
-  });
-  child.stderr.pipe(process.stderr);
-
-  process.stdin.pipe(child.stdin);
-
-  // 客户端关闭 stdin 时，优雅关闭子进程
-  process.stdin.on('end', () => {
-    try {
-      child.stdin.end();
-    } catch {
-      /* 子进程可能已退出 */
-    }
-  });
-
-  // 管道错误不应导致启动器崩溃
-  child.stdin.on('error', () => {});
-  child.stdout.on('error', () => {});
-  process.stdout.on('error', () => {});
-
-  return new Promise((resolve) => {
-    child.on('error', (e) => {
-      log('无法启动 MCP Server：' + e.message);
-      resolve({ code: 1, fastExit: true, hadOutput: false });
-    });
-
-    child.on('close', (code, signal) => {
-      if (signal) log('MCP Server 被信号终止：' + signal);
-      resolve({
-        code: code == null ? 1 : code,
-        fastExit: Date.now() - startedAt < 15000,
-        hadOutput,
-      });
-    });
-  });
 }
 
 /* ------------------------------------------------------------------ *
@@ -535,9 +510,8 @@ async function main() {
     return;
   }
 
-  const venvPython = await prepareRuntime();
-  const result = await startServer(venvPython);
-  process.exit(result.code);
+  // 正常启动：走代理模式，先握手再后台准备运行时
+  startWithProxy();
 }
 
 main().catch(fatal);

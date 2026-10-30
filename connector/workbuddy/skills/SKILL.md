@@ -32,9 +32,15 @@ author: "ZWCAD 2D MCP Team"
 
 - **已装未启动**：提示启动 ZWCAD 并打开/新建 DWG，重连后继续。
 
-### ③ 运行依赖 Python 3.10+（本连接器由 Node 启动器托管 Python 服务）
+### ③ 运行依赖 Python 3.10+（首次使用需等待约 40 秒安装）
 
-本连接器通过 `npx -y zwcad-mcp` 启动。Node 启动器（`bridge.js`）会在后台准备 Python 运行时，**用户无需安装 uv/uvx**。
+本连接器通过 `npx -y zwcad-mcp` 启动。启动器分为两层，**握手与安装是分开的**：
+
+- **JS 层**（随包分发，立即可用）：完成 MCP 握手、暴露全部工具定义、转发请求
+- **Python 层**（首次使用时现场安装）：实际执行 COM 调用与绘图逻辑
+
+因此**首次使用时 MCP 可以瞬间连上**（实测 117 ms），工具列表也立刻可见。
+真正的 Python 运行时在后台准备，约 40 秒，期间工具调用会返回「正在初始化」。
 
 启动器按以下顺序寻找 Python，取第一个可用（>=3.10）的：
 
@@ -45,30 +51,80 @@ author: "ZWCAD 2D MCP Team"
 | 3 | WorkBuddy 安装目录自带：`%LOCALAPPDATA%\Programs\WorkBuddy\resources\vendor\python\python.exe` |
 | 4 | 系统 `python` / `python3` |
 
-**首次启动会自动创建隔离环境并安装依赖**（约 30~60 秒，仅一次），位置 `%USERPROFILE%\.workbuddy\zwcad-mcp-runtime\`；之后启动约 2 秒。
+---
 
-| 检测 | 处置 |
+#### 首次使用：如何向用户解释
+
+工具调用若返回 `isError: true` 且文案为「**正在首次初始化（准备 Python 运行时并安装依赖）**」，
+说明这是该用户**第一次使用**，属正常流程，**不是故障**。
+
+此时必须这样做：
+
+1. **优先调用 `zwcad_wait_ready` 等一次**（推荐）
+
+   ```
+   zwcad_wait_ready(timeout_seconds: 90)
+   ```
+
+   它会阻塞到就绪或超时，直接给出确定结论。在它返回前**不要调用其它工具**。
+
+2. 同时**明确告知用户这是一次性安装**，例如：
+   > 这是首次使用，我正在为你准备运行环境（约 40 秒），完成后立即继续。请稍候。
+
+3. **不要反复重试同一个业务工具**——每秒重试一次也不会更快，只会刷屏。
+
+4. **不要下「不可用」「安装失败」之类的结论**——这会让用户误以为环境有问题。
+
+5. 就绪后**直接继续原任务**，无需让用户重新发起请求。
+
+> 判据：错误文案里出现「正在首次初始化」= 等待状态；
+> 出现「运行时准备失败」= 真故障。
+
+`zwcad_wait_ready` 的返回含义：
+
+| 返回 | 含义 | 下一步 |
+|---|---|---|
+| `isError: false` | 已就绪 | 直接继续原任务 |
+| `isError: true`，文案含「仍在安装依赖」 | 还在装，超时了 | 再调一次等待，或告知用户继续等待 |
+| `isError: true`，文案含「初始化失败」 | 真故障 | 按下一节处置 |
+
+#### 确实失败时：如何向用户报告
+
+工具返回 `isError: true` 且文案含「**Python 运行时准备失败**」，才是真故障。
+此时把错误详情转述给用户，并按「错误」字段里的提示给出解决步骤。
+
+常见原因与对应处置：
+
+| 错误特征 | 原因 | 让用户做什么 |
+|---|---|---|
+| `未找到可用的 Python` | 本机没有 3.10+ 的 Python | 安装 Python（建议 3.13），或设 `ZWCAD_MCP_PYTHON` 指向已有解释器 |
+| pip 相关超时 / 网络错误 | 无法访问 PyPI | 设置环境变量 `ZWCAD_MCP_PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple` 后重连 |
+| 磁盘空间不足 | 安装 venv 失败 | 清理磁盘（需约 200 MB） |
+
+诊断命令（可让用户直接在终端执行）：
+
+```bash
+npx -y zwcad-mcp --doctor
+```
+
+它会列出全部 Python 候选、虚拟环境状态与逐个依赖的导入结果，可直接定位是缺 Python 还是缺依赖。
+
+| 现场情况 | 处置 |
 |---|---|
 | 工具可正常返回 | 就绪，无需操作 |
-| 首次启动等待较久（2 分钟内） | **正常**，正在安装依赖，告知用户稍候 |
-| 报「未找到可用的 Python」 | 需安装 Python 3.10+，或设 `ZWCAD_MCP_PYTHON` 指向已有解释器 |
-| 安装依赖失败（网络） | 设 `ZWCAD_MCP_PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple` 后重连 |
-| 启动即失败 | 执行 `npx -y zwcad-mcp --doctor` 查看逐项诊断（无需知道安装路径） |
 | 需要彻底重置 | 删除 `%USERPROFILE%\.workbuddy\zwcad-mcp-runtime\` 后重连，会自动重建 |
 
-> 排障优先用 `--doctor`：它列出全部 Python 候选、虚拟环境状态与逐个依赖的导入结果，可直接定位是缺 Python 还是缺依赖。
-
-> 若环境已把 `zwcad-mcp` pip 装进某个 Python 环境，可改用 `python -m zwcad2d` 直接启动，跳过本节的自动准备流程。
+> 若环境已把 `zwcad-mcp` pip 装进某个 Python 环境，可改用 `python -m zwcad2d` 直接启动，跳过自动准备流程。
 
 ---
 
 ## 工具发现机制（重要）
 
-- 全部工具由 **MCP 服务动态提供**（`tools/list`），当前版本 39 个（平台 26 + 机械 11 + 诊断 2），随版本演进可能增减。工具名称、参数与输入 schema 一律**以 MCP 服务返回为准**，本文档不再重复罗列。
+- 全部工具由 **MCP 服务动态提供**（`tools/list`），当前版本 40 个（平台 26 + 机械 11 + 诊断 2 + 启动器等待工具 1），随版本演进可能增减。工具名称、参数与输入 schema 一律**以 MCP 服务返回为准**，本文档不再重复罗列。
 - 调用前先查目标工具的 description 与 input schema，再按其说明传参（角度单位为弧度）。
 - 工具调用失败时优先读取返回的 `error` / `code` / `hint` 字段，并结合「常见错误场景」排查。
 
-> **参考信息源**：本 Skill 涉及的工具详细说明、类型库加载机制与重要说明，以连接器内随包的 README 为准，位于 `node_modules/zwcad-mcp/README.md`；与其同源的完整版（含 39 个工具逐项说明、类型库 5 级回退策略）见项目仓库的 `README.md`。
+> **参考信息源**：本 Skill 涉及的工具详细说明、类型库加载机制与重要说明，以连接器内随包的 README 为准，位于 `node_modules/zwcad-mcp/README.md`；与其同源的完整版（含 39 个 Python 侧工具逐项说明、类型库 5 级回退策略）见项目仓库的 `README.md`。
 >
 > 若改用 `pip install zwcad-mcp` 安装方式，则 README 位于对应 Python 环境的 `site-packages` 目录下，也可这样读取全文：
 >
@@ -106,7 +162,9 @@ author: "ZWCAD 2D MCP Team"
 | 非 Windows 系统    | 运行环境为 macOS/Linux，工具全部不可用                                                          | 直接告知用户"本 MCP 只支持 Windows"并停止操作，详见「环境前提检查 ①」                                                                     |
 | 未安装 ZWCAD       | 探测不到 CAD 实例：`platform.available=false` / `Connection closed`                            | 直接告知用户下载安装 ZWCAD：https://www.zwsoft.cn/product/zwcad ，装好打开 DWG 后再重连，详见「环境前提检查 ②」                            |
 | 未找到 Python      | 报「未找到可用的 Python（需要 >= 3.10）」                                                        | 安装 Python 3.10+（建议 3.13），或设 `ZWCAD_MCP_PYTHON` 指向已有解释器，见「③」                                                           |
-| 首次启动很慢       | 首次连接等待 30~60 秒                                                                             | **正常**，正在自动安装依赖；告知用户稍候，之后启动约 2 秒                                                                                   |
+| 首次使用提示正在初始化 | 工具返回「**正在首次初始化**…约需 30~60 秒」 | **正常流程，不是故障**。告知用户等待，20~30 秒后重试，勿频繁刷屏，详见「③」 |
+| 运行时确实失败     | 工具返回「**Python 运行时准备失败**」                                                              | 转述错误详情，按「③ 确实失败时」处置；必要时让用户跑 `npx -y zwcad-mcp --doctor`                       |
+| 首次安装后工具仍不可用 | 提示仍是「正在首次初始化」，但已超过 2 分钟                                                   | 让用户执行 `npx -y zwcad-mcp --doctor`；或删 `%USERPROFILE%\.workbuddy\zwcad-mcp-runtime\` 后重连     |
 | 运行时损坏         | 上次可用、某次突然启动失败                                                                        | 执行 `npx -y zwcad-mcp --doctor` 看逐项诊断；或删除 `%USERPROFILE%\.workbuddy\zwcad-mcp-runtime\` 后重连自动重建                    |
 | 未启动/未打开图纸  | `Connection closed`、COM 初始化错误（-2147221008）                                              | 启动 ZWCAD 并打开 DWG，重启 MCP                                                                                                             |
 | 机械工具失败       | `MECHANICAL_NOT_AVAILABLE` / `TYPELIB_NOT_LOADED`                                               | 调用 `zwcad_mech_diagnose` 获取逐项探测结果与修复建议；类型库加载机制与 `PYZWCADMECH_TLB_PATH` 配置详见 README「ZwmToolKit 类型库加载机制」 |

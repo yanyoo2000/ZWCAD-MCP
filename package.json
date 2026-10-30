@@ -1,6 +1,6 @@
 {
   "name": "zwcad-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "中望CAD（ZWCAD）MCP 服务：用自然语言驱动 ZWCAD 二维平台与中望机械 CAD，完成绘图、标注、图层管理与机械图框/BOM 操作",
   "license": "MIT",
   "type": "commonjs",
@@ -10,6 +10,8 @@
   },
   "files": [
     "bridge.js",
+    "lib/",
+    "tools.json",
     "runtime/",
     "pyproject.toml",
     "README.md",
