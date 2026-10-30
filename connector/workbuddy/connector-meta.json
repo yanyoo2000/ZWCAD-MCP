@@ -7,7 +7,7 @@
   "description_en": "Drive ZWCAD 2D platform and ZWCAD Mechanical CAD with natural language: draw, query, annotate, and manage DWG drawings.",
   "source": "zwcad-mcp",
   "type": "mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "minWorkbuddyVersion": "4.22.15",
   "examples_zh": [
     "在中望CAD中，以当前图纸原点为起点，画一条长度 100 的水平直线",

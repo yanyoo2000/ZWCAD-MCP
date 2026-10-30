@@ -79,9 +79,13 @@ function log(...parts) {
   process.stderr.write('[zwcad-mcp] ' + parts.join(' ') + '\n');
 }
 
+/** 错误日志（落盘），失败不影响主流程 */
+const { logError, logFilePath } = require('./lib/errorlog');
+
 function fatal(err) {
   const msg = err && err.stack ? err.stack : String(err);
   log('启动失败：' + msg);
+  logError('launcher.fatal', { error: err });
   process.exit(1);
 }
 
@@ -260,6 +264,12 @@ function resolvePython() {
     log('使用 Python ' + ver.join('.') + '：' + exe);
     return { exe, version: ver };
   }
+  logError('runtime.python.not_found', {
+    candidates: pythonCandidates(),
+    tried,
+    minVersion: MIN_PYTHON.join('.'),
+    envOverride: process.env.ZWCAD_MCP_PYTHON || null,
+  });
   throw new Error(
     '未找到可用的 Python（需要 >= ' +
       MIN_PYTHON.join('.') +
@@ -384,7 +394,20 @@ async function installDeps(venvPython) {
   args.push(...requiredPackages());
 
   log('首次运行，安装依赖（约 30~60 秒，请稍候）…');
-  await runStreaming(venvPython, args, '安装依赖');
+  const startedAt = Date.now();
+  try {
+    await runStreaming(venvPython, args, '安装依赖');
+  } catch (e) {
+    logError('runtime.install.failed', {
+      error: e,
+      packageCount: requiredPackages().length,
+      packages: requiredPackages(),
+      pipIndex: index || null,
+      elapsedMs: Date.now() - startedAt,
+      venvPython,
+    });
+    throw e;
+  }
 }
 
 /**
@@ -489,6 +512,31 @@ function doctor() {
     }
   } else {
     log('--- 虚拟环境 --- 尚未创建（首次启动时会自动创建）');
+  }
+
+  log('--- 错误日志 ---');
+  const lp = logFilePath();
+  if (fs.existsSync(lp)) {
+    const st = fs.statSync(lp);
+    log('  路径：' + lp);
+    log('  大小：' + (st.size / 1024).toFixed(1) + ' KB，最近写入 ' + st.mtime.toISOString());
+    log('  查看最近 10 条：');
+    try {
+      const lines = fs.readFileSync(lp, 'utf8').trim().split('\n').slice(-10);
+      for (const line of lines) {
+        try {
+          const r = JSON.parse(line);
+          log('    [' + r.time + '] ' + r.event);
+        } catch {
+          log('    ' + line.slice(0, 120));
+        }
+      }
+    } catch {
+      log('    （读取失败）');
+    }
+  } else {
+    log('  暂无错误记录（这是好事）');
+    log('  路径：' + lp + '（首次出错时自动创建）');
   }
 }
 

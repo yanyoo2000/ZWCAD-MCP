@@ -78,11 +78,26 @@ npx -y zwcad-mcp --prepare     # 只准备运行时后退出
 
 | 现象 | 处理 |
 |---|---|
-| 首次启动等待 30~60 秒 | **正常**，正在安装依赖，之后约 2 秒启动 |
+| 首次使用提示「正在首次初始化」 | **正常**，正在后台安装依赖（约 40 秒），握手本身只需约 120 ms |
 | 报「未找到可用的 Python」 | 装 Python 3.10+，或设 `ZWCAD_MCP_PYTHON` 指向已有解释器 |
 | 装依赖失败（网络） | 设 `ZWCAD_MCP_PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple` |
 | 运行时损坏 | 删 `%USERPROFILE%\.workbuddy\zwcad-mcp-runtime\` 后重连，自动重建 |
 | 机械工具报 `TYPELIB_NOT_LOADED` | 需中望机械CAD 已启动；平台工具不受影响 |
+
+### 错误日志
+
+启动器会把**失败事件**写入本地文件，便于排查与反馈：
+
+```
+%USERPROFILE%\.workbuddy\zwcad-mcp-runtime\logs\error.log
+```
+
+- 每行一条 JSON：时间、事件名、Node 版本、诊断细节
+- **只记失败**，不记成功的工具调用，不含图纸内容
+- 单文件上限 1 MB，自动轮转为 `.1`~`.3`，总量 ≤ 4 MB
+- `--doctor` 末尾会直接打印最近 10 条摘要，多数情况无需打开文件
+
+可用 `ZWCAD_MCP_LOG_DIR` 改变存放位置。
 
 ### 关于 `-2147312566`（加载类型库/DLL 时出错）
 
@@ -98,6 +113,7 @@ npx -y zwcad-mcp --prepare     # 只准备运行时后退出
 |---|---|
 | `ZWCAD_MCP_PYTHON` | 指定 Python 解释器路径，跳过自动探测（无效时报错而非静默回退） |
 | `ZWCAD_MCP_PIP_INDEX` | 指定 pip 镜像源 |
+| `ZWCAD_MCP_LOG_DIR` | 指定错误日志目录，默认在 `zwcad-mcp-runtime/logs` |
 
 ## 仓库结构
 
