@@ -29,25 +29,22 @@ MCP 客户端 ──stdio──► bridge.js ──spawn──► python -m zwca
 
 ## 快速开始
 
-无需安装，客户端会自动拉起：
+无需安装，客户端会自动拉起。把下面整段复制进 MCP 客户端的配置文件即可：
 
 ```json
 {
   "mcpServers": {
     "zwcad": {
       "command": "npx",
-      "args": ["-y", "zwcad-mcp"],
+      "args": ["--registry=https://registry.npmmirror.com", "-y", "zwcad-mcp"],
       "env": { "PYTHONUTF8": "1" }
     }
   }
 }
 ```
 
-国内网络建议加镜像参数：
-
-```json
-"args": ["--registry=https://registry.npmmirror.com", "-y", "zwcad-mcp"]
-```
+`--registry=https://registry.npmmirror.com` 为国内镜像，可显著加快首次拉取。
+若网络可直连 npm 官方源，可删掉该参数，简化为 `"args": ["-y", "zwcad-mcp"]`。
 
 各平台的配置文件位置见 [`connector/`](connector/) 目录。
 
