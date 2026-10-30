@@ -1300,7 +1300,7 @@
  },
  {
   "name": "zwcad_diagnose",
-  "description": "诊断平台和机械后端，并给出不修改系统的排障建议。",
+  "description": "诊断 MCP 服务的运行状态，并按需给出修复建议。\n\n分两种情形，工具名不变：\n- Python 运行时已就绪：返回完整诊断（平台 COM 可用性、活动图纸、机械扩展与 ZwmToolKit 类型库状态）。\n- Python 运行时未就绪：自动降级为启动器视角，返回运行时状态、Python 解释器路径与版本、最近错误记录（含 pip 镜像源、依赖清单、耗时），并明确标注哪些项目本次未检测。\n\n因此排查任何问题都从这里开始，无需另找工具。",
   "inputSchema": {
    "properties": {
     "probe_cad": {

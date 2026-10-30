@@ -95,11 +95,17 @@ author: "ZWCAD 2D MCP Team"
 **先自己查，不要一上来就让用户跑命令**：
 
 ```
-zwcad_launcher_diagnose(limit: 10)
+zwcad_diagnose(probe_cad: false)
 ```
 
-本工具由启动器实现，**在 Python 未就绪时也可用**，会返回运行时状态、
-Python 路径与版本、以及最近若干条错误记录（含 pip 镜像源、依赖清单、耗时等细节）。
+这是**唯一的诊断入口**，两种情况它都能用：
+
+- **Python 已就绪** → 返回完整诊断（ZWCAD 连接、机械类型库、平台可用性）
+- **Python 未就绪** → 自动降级为启动器视角，返回运行时状态、Python 路径与版本、
+  最近若干条错误记录（含 pip 镜像源、依赖清单、耗时等），并明确标注哪些项目本次未检测
+
+> 若返回内容里出现「诊断来源：启动器视角」，说明 Python 还没装好。
+> 此时不必另找工具，等待后再调一次即可获得完整诊断。
 
 按返回内容判断原因，再用自然语言告诉用户**具体怎么修**：
 
@@ -134,10 +140,11 @@ Python 路径与版本、以及最近若干条错误记录（含 pip 镜像源�
 
 ## 工具发现机制（重要）
 
-- 全部工具由 **MCP 服务动态提供**（`tools/list`），当前版本 41 个（平台 26 + 机械 11 + 诊断 2 + 启动器侧 2），随版本演进可能增减。工具名称、参数与输入 schema 一律**以 MCP 服务返回为准**，本文档不再重复罗列。
+- 全部工具由 **MCP 服务动态提供**（`tools/list`），当前版本 40 个（平台 26 + 机械 11 + 诊断 2 + 启动器侧 1），随版本演进可能增减。工具名称、参数与输入 schema 一律**以 MCP 服务返回为准**，本文档不再重复罗列。
 
 > 启动器侧的两个工具在 Python 未就绪时也可用：
-> `zwcad_wait_ready`（等待就绪）、`zwcad_launcher_diagnose`（诊断运行时与错误日志）。
+> `zwcad_wait_ready`（等待就绪）。诊断统一走 `zwcad_diagnose`，
+> 它在 Python 未就绪时会自动降级为启动器视角。
 - 调用前先查目标工具的 description 与 input schema，再按其说明传参（角度单位为弧度）。
 - 工具调用失败时优先读取返回的 `error` / `code` / `hint` 字段，并结合「常见错误场景」排查。
 
@@ -180,9 +187,9 @@ Python 路径与版本、以及最近若干条错误记录（含 pip 镜像源�
 | 未安装 ZWCAD       | 探测不到 CAD 实例：`platform.available=false` / `Connection closed`                            | 直接告知用户下载安装 ZWCAD：https://www.zwsoft.cn/product/zwcad ，装好打开 DWG 后再重连，详见「环境前提检查 ②」                            |
 | 未找到 Python      | 报「未找到可用的 Python（需要 >= 3.10）」                                                        | 安装 Python 3.10+（建议 3.13），或设 `ZWCAD_MCP_PYTHON` 指向已有解释器，见「③」                                                           |
 | 首次使用提示正在初始化 | 工具返回「**正在首次初始化**…约需 30~60 秒」 | **正常流程，不是故障**。告知用户等待，20~30 秒后重试，勿频繁刷屏，详见「③」 |
-| 运行时确实失败     | 工具返回「**Python 运行时准备失败**」                                                              | 调 `zwcad_launcher_diagnose` 自取错误详情，按「③ 确实失败时」处置                                         |
-| 首次安装后工具仍不可用 | 提示仍是「正在首次初始化」，但已超过 2 分钟                                                   | 调 `zwcad_launcher_diagnose` 查错误记录；确认无错误后可删 `%USERPROFILE%\.workbuddy\zwcad-mcp-runtime\` 后重连 |
-| 运行时损坏         | 上次可用、某次突然启动失败                                                                        | 调 `zwcad_launcher_diagnose` 看错误记录；确认后删 `%USERPROFILE%\.workbuddy\zwcad-mcp-runtime\` 重连自动重建                         |
+| 运行时确实失败     | 工具返回「**Python 运行时准备失败**」                                                              | 调 `zwcad_diagnose` 自取错误详情，按「③ 确实失败时」处置                                         |
+| 首次安装后工具仍不可用 | 提示仍是「正在首次初始化」，但已超过 2 分钟                                                   | 调 `zwcad_diagnose` 查错误记录；确认无错误后可删 `%USERPROFILE%\.workbuddy\zwcad-mcp-runtime\` 后重连 |
+| 运行时损坏         | 上次可用、某次突然启动失败                                                                        | 调 `zwcad_diagnose` 看错误记录；确认后删 `%USERPROFILE%\.workbuddy\zwcad-mcp-runtime\` 重连自动重建                         |
 | 未启动/未打开图纸  | `Connection closed`、COM 初始化错误（-2147221008）                                              | 启动 ZWCAD 并打开 DWG，重启 MCP                                                                                                             |
 | 机械工具失败       | `MECHANICAL_NOT_AVAILABLE` / `TYPELIB_NOT_LOADED`                                               | 调用 `zwcad_mech_diagnose` 获取逐项探测结果与修复建议；类型库加载机制与 `PYZWCADMECH_TLB_PATH` 配置详见 README「ZwmToolKit 类型库加载机制」 |
 | 机械类型库解析失败 | `TYPELIB_NOT_LOADED`，`typelib_error` 含 `-2147312566`（`0x80029C4A`）「加载类型库/DLL 时出错」 | 按下方「机械类型库加载失败（-2147312566）的处置」分步处理，多数情况在第 1~3 步内解决                                                        |
