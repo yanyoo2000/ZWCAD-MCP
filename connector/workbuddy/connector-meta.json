@@ -1,0 +1,24 @@
+{
+  "name": "中望CAD MCP",
+  "name_zh": "中望CAD MCP",
+  "name_en": "ZWCAD MCP",
+  "description": "用自然语言直接操作中望CAD（ZWCAD）二维平台与中望机械CAD，自动绘制、查询、标注和管理 DWG 图纸。",
+  "description_zh": "用自然语言直接操作中望CAD（ZWCAD）二维平台与中望机械CAD，自动绘制、查询、标注和管理 DWG 图纸。",
+  "description_en": "Drive ZWCAD 2D platform and ZWCAD Mechanical CAD with natural language: draw, query, annotate, and manage DWG drawings.",
+  "source": "zwcad-mcp",
+  "type": "mcp",
+  "version": "0.2.0",
+  "minWorkbuddyVersion": "4.22.15",
+  "examples_zh": [
+    "在中望CAD中，以当前图纸原点为起点，画一条长度 100 的水平直线",
+    "在中望CAD中，将当前图纸中所有红色圆移到新图层并改为蓝色",
+    "在中望机械CAD中，在当前 DWG 中插入 A3 图框并填写标题栏",
+    "在中望机械CAD中，为当前装配生成零件明细表（BOM）"
+  ],
+  "examples_en": [
+    "Draw a 100-unit horizontal line starting from the origin of the current drawing",
+    "Move all red circles in the current drawing to a new layer and change their color to blue",
+    "Insert an A3 frame into the current DWG and fill in its title block",
+    "Generate a parts list (BOM) for the current assembly"
+  ]
+}

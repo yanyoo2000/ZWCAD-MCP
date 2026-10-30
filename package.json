@@ -1,0 +1,54 @@
+{
+  "name": "zwcad-mcp",
+  "version": "0.1.0",
+  "description": "中望CAD（ZWCAD）MCP 服务：用自然语言驱动 ZWCAD 二维平台与中望机械 CAD，完成绘图、标注、图层管理与机械图框/BOM 操作",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "bridge.js",
+  "bin": {
+    "zwcad-mcp": "bridge.js"
+  },
+  "files": [
+    "bridge.js",
+    "runtime/",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "doctor": "node bridge.js --doctor",
+    "prepare-runtime": "node bridge.js --prepare",
+    "build:connector": "node scripts/build-connector.js",
+    "check:connector": "node scripts/build-connector.js --check",
+    "prepack": "node scripts/build-connector.js --check"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "win32"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "zwcad",
+    "zwsoft",
+    "cad",
+    "autocad",
+    "drawing",
+    "mechanical"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yanyoo2000/ZWCAD-2D-MCP.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yanyoo2000/ZWCAD-2D-MCP/issues"
+  },
+  "homepage": "https://github.com/yanyoo2000/ZWCAD-2D-MCP#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

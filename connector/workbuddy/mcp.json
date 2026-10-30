@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "zwcad-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "--registry=https://registry.npmmirror.com",
+        "-y",
+        "zwcad-mcp"
+      ],
+      "env": {
+        "PYTHONUTF8": "1"
+      },
+      "timeout": 180000,
+      "runtime": {
+        "type": "node",
+        "version": ">=18"
+      }
+    }
+  }
+}

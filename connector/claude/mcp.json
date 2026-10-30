@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "zwcad": {
+      "command": "npx",
+      "args": ["--registry=https://registry.npmmirror.com", "-y", "zwcad-mcp"],
+      "env": {
+        "PYTHONUTF8": "1"
+      }
+    }
+  }
+}

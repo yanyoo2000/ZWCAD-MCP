@@ -1,0 +1,83 @@
+name: Publish
+
+# 打 tag 即发布（tag 形如 v0.1.0）
+# 发布前会校验：tag 与 package.json 版本一致、连接器结构完整、安装冒烟测试通过
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  verify:
+    name: 校验
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 校验 tag 与 package.json 版本一致
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          PKG=$(node -p "require('./package.json').version")
+          echo "tag=$TAG package.json=$PKG"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag ($TAG) 与 package.json 版本 ($PKG) 不一致"
+            exit 1
+          fi
+
+      - name: 校验各平台连接器结构
+        run: node scripts/build-connector.js --check
+
+      - name: 校验 Python 源码可编译
+        shell: bash
+        run: |
+          for f in runtime/zwcad2d/*.py; do
+            python -c "import ast,sys; ast.parse(open(sys.argv[1],encoding='utf-8-sig').read())" "$f"
+            echo "OK $f"
+          done
+
+      - name: 校验 bridge.js 语法
+        run: node --check bridge.js
+
+      - name: 打包产物检查
+        shell: bash
+        run: |
+          npm pack --silent 2>/dev/null | tail -1
+          echo "--- 包内文件 ---"
+          tar -tzf *.tgz | sort
+
+  publish:
+    name: 发布到 npm
+    needs: verify
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write # 用于 npm provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 发布前安装冒烟测试
+        shell: bash
+        run: |
+          # 从 tag 前的代码做一次最小验证：打包能被 npm 正常安装
+          npm pack --silent 2>/dev/null | tail -1
+          TGZ=$(ls *.tgz | head -1)
+          mkdir -p /tmp/smoke && cd /tmp/smoke
+          npm init -y >/dev/null 2>&1
+          npm install --no-audit --no-fund "$OLDPWD/$TGZ" >/dev/null 2>&1
+          test -f node_modules/zwcad-mcp/bridge.js
+          echo "冒烟测试通过：npm 包可正常安装"
+
+      - name: 发布
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
