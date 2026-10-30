@@ -6,8 +6,10 @@ dist/
 *.tgz
 
 # Python
-__pycache__/
-*.py[cod]
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
 .venv/
 *.egg-info/
 

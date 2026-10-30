@@ -9,6 +9,21 @@
 | `icon.png` | 市场展示图标（64×64） |
 | `skills/SKILL.md` | 教 AI 如何正确使用这些工具 |
 
+## 目录结构
+
+```
+connector/workbuddy/
+├── README.md              本文件（平台级开发说明，不参与打包）
+└── zwcad-mcp/             连接器资源
+    ├── connector-meta.json
+    ├── mcp.json
+    ├── icon.png
+    └── skills/SKILL.md
+```
+
+一个平台下可以有多个连接器（例如将来新增 `zwcad-mech-mcp`），
+构建脚本会自动遍历 `workbuddy/` 下所有含必需文件的子目录。
+
 ## 提交到市场
 
 WorkBuddy 要求**文件在包根目录扁平放置**。本仓库为了多平台共存放在子目录里，所以提交前需要构建：
@@ -17,10 +32,10 @@ WorkBuddy 要求**文件在包根目录扁平放置**。本仓库为了多平台
 npm run build:connector
 ```
 
-产物在 `dist/workbuddy/`，将该目录内容作为连接器包提交：
+产物在 `dist/workbuddy/zwcad-mcp/`，将该目录内容作为连接器包提交：
 
 ```
-dist/workbuddy/
+dist/workbuddy/zwcad-mcp/
 ├── connector-meta.json
 ├── mcp.json
 ├── icon.png
