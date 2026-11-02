@@ -1,4 +1,4 @@
-﻿"""
+"""
 ZWCAD-2D MCP Server
 
 一个 MCP 入口同时提供 ZWCAD 平台能力与可选的中望机械能力。
@@ -7,6 +7,7 @@ ZWCAD-2D MCP Server
 import math
 import sys
 import os
+import time
 import logging
 import importlib.util
 import pythoncom
@@ -185,7 +186,13 @@ def _get_default_frame_size(standard_name):
 _cad_conn_cache = None
 
 
-def get_cad_connection(require_mechanical: bool = False):
+def get_cad_connection(require_mechanical: bool = False, create_if_not_exists: bool = False):
+    """获取 ZWCAD 连接。
+
+    require_mechanical: 需要机械扩展时传 True。
+    create_if_not_exists: ZWCAD 未运行时是否尝试主动拉起。
+        默认 False，只在已运行实例上连接；launch_cad 工具会传 True。
+    """
     global _cad_conn_cache
     if _cad_conn_cache is not None:
         try:
@@ -205,7 +212,7 @@ def get_cad_connection(require_mechanical: bool = False):
         pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
     except Exception:
         pass
-    zcad_conn = ZwCAD()
+    zcad_conn = ZwCAD(create_if_not_exists=create_if_not_exists)
     mech_conn = None
     mechanical_class = _load_mechanical_class() if require_mechanical else None
     if mechanical_class is not None:
@@ -229,6 +236,17 @@ def _ok(message: str = None, **data) -> dict:
     if message:
         data["msg"] = message
     return data
+
+
+def _document_info(doc) -> dict:
+    """返回文档的稳定字段，兼容尚未保存的新图纸。"""
+    return {
+        "name": doc.Name,
+        "full_name": doc.FullName,
+        "path": doc.Path,
+        "saved": doc.Saved,
+        "readonly": doc.ReadOnly,
+    }
 
 
 def _typelib_state(load: bool = False):
@@ -1877,9 +1895,61 @@ def zwcad_manage_view(action: str, name: str = None, params: dict = None) -> dic
 
 
 @mcp.tool
+def zwcad_launch_cad(create_new_drawing: bool = False,
+                     wait_timeout: float = 30.0) -> dict:
+    """启动或连接 ZWCAD。
+
+    ZWCAD 未运行时主动拉起它，已运行时直接复用现有实例。
+    其它工具都要求 ZWCAD 已启动，本工具是唯一能在未启动时主动建立连接的入口。
+
+    create_new_drawing: 启动后没有任何文档时，是否新建一张空白图纸。
+    wait_timeout: 等待 ZWCAD COM 应用就绪的秒数，范围 1~120。
+    """
+    try:
+        logger.info(
+            "tool_call zwcad_launch_cad create_new_drawing=%s wait_timeout=%s",
+            create_new_drawing,
+            wait_timeout,
+        )
+        timeout = max(1.0, min(float(wait_timeout), 120.0))
+        deadline = time.monotonic() + timeout
+        last_error = None
+
+        while True:
+            try:
+                zcad_conn, _ = get_cad_connection(create_if_not_exists=True)
+                app = zcad_conn.app
+                app.Visible = True
+                document_count = app.Documents.Count
+                if create_new_drawing and document_count == 0:
+                    app.Documents.Add()
+                    document_count = app.Documents.Count
+
+                result = {
+                    "application": app.Name,
+                    "visible": bool(app.Visible),
+                    "document_count": document_count,
+                }
+                if document_count > 0:
+                    result["active_document"] = _document_info(app.ActiveDocument)
+                return _ok("ZWCAD 已启动并可用", data=result)
+            except Exception as exc:
+                last_error = exc
+                # 连接失败后必须清缓存，否则下一轮仍拿到失效实例
+                reset_cad_connection()
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"等待 ZWCAD 启动超时（{timeout:g} 秒）: {last_error}"
+                    ) from last_error
+                time.sleep(0.5)
+    except Exception as e:
+        return _err("启动 ZWCAD", e)
+
+
+@mcp.tool
 def zwcad_manage_document(action: str, params: dict = None) -> dict:
     """文档管理。action及params:
-    new(无需params) | save:{file_path} | close:{[save_changes]}
+    new(无需params) | open:{file_path,[read_only],[launch_if_needed]} | save:{file_path} | close:{[save_changes]}
     info/list(无需params) | activate:{name}
     export:{filename,[extension]} | import:{filename,[x,y,z,scale_factor]}
     plot:{plot_file,[plot_config]}
@@ -1888,8 +1958,48 @@ def zwcad_manage_document(action: str, params: dict = None) -> dict:
     wblock:{file_name,[selection_set_name]}"""
     try:
         logger.info("tool_call zwcad_manage_document action=%s", action)
-        zcad_conn, _ = get_cad_connection()
         p = params or {}
+
+        # open 必须在取通用连接之前处理：它允许在 ZWCAD 未运行时一并拉起
+        if action == "open":
+            file_path = p.get("file_path")
+            if not file_path or not isinstance(file_path, str):
+                return _err("打开图纸", ValueError("必须提供 file_path"))
+            file_path = os.path.expandvars(file_path)
+            if not os.path.isabs(file_path):
+                return _err("打开图纸", ValueError("file_path 必须是绝对路径"))
+            file_path = os.path.abspath(file_path)
+            if os.path.splitext(file_path)[1].lower() != ".dwg":
+                return _err("打开图纸", ValueError("当前接口只允许打开 .dwg 文件"))
+            if not os.path.isfile(file_path):
+                return _err("打开图纸", FileNotFoundError(f"文件不存在: {file_path}"))
+
+            launch_if_needed = bool(p.get("launch_if_needed", True))
+            zcad_conn, _ = get_cad_connection(create_if_not_exists=launch_if_needed)
+            app = zcad_conn.app
+            app.Visible = True
+            normalized_target = os.path.normcase(os.path.normpath(file_path))
+
+            # 已打开同一张图时直接激活，避免重复打开导致多窗口
+            for opened_doc in app.Documents:
+                opened_path = getattr(opened_doc, "FullName", "") or ""
+                if opened_path and os.path.normcase(os.path.normpath(opened_path)) == normalized_target:
+                    opened_doc.Activate()
+                    return _ok(
+                        "图纸已经打开，现已激活",
+                        already_open=True,
+                        data=_document_info(opened_doc),
+                    )
+
+            opened_doc = app.Documents.Open(file_path, bool(p.get("read_only", False)))
+            opened_doc.Activate()
+            return _ok(
+                f"成功打开图纸: {file_path}",
+                already_open=False,
+                data=_document_info(opened_doc),
+            )
+
+        zcad_conn, _ = get_cad_connection()
 
         if action == "new":
             new_doc = zcad_conn.app.Documents.Add()

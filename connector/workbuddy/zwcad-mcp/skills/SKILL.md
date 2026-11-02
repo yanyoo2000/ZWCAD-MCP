@@ -30,7 +30,28 @@ author: "ZWCAD 2D MCP Team"
 > 当前电脑没有安装 ZWCAD，本 MCP 无法使用。请先到这里下载并安装：https://www.zwsoft.cn/product/zwcad
 > 装好后：① 打开 ZWCAD 并新建/打开一张 DWG；② 在连接器管理页重连「中望CAD MCP」；③ 回来让我继续。
 
-- **已装未启动**：提示启动 ZWCAD 并打开/新建 DWG，重连后继续。
+- **已装未启动**：**先试着自己启动，不要直接让用户去点图标。**
+
+  ```
+  zwcad_launch_cad(create_new_drawing: true)
+  ```
+
+  它会在 ZWCAD 未运行时主动拉起，并可选新建一张空白图纸；已运行时直接复用现有实例。
+  成功返回 `data.application` / `data.document_count`，之后即可正常调用其它工具。
+
+  只有它返回错误（如提示未安装、等待超时）时，才让用户手动启动，并按「未安装」的话术处理。
+
+- **需要打开指定 DWG 时**：
+
+  ```
+  zwcad_manage_document(action: "open", params: {
+    file_path: "C:\\path\\to\\drawing.dwg",
+    launch_if_needed: true
+  })
+  ```
+
+  `file_path` 必须是**绝对路径**且后缀为 `.dwg`；图纸已打开时会自动激活而不是重复打开。
+  `launch_if_needed` 默认 true，表示 ZWCAD 未运行时一并拉起。
 
 ### ③ 运行依赖 Python 3.10+（首次使用需等待约 40 秒安装）
 
@@ -140,7 +161,7 @@ zwcad_diagnose(probe_cad: false)
 
 ## 工具发现机制（重要）
 
-- 全部工具由 **MCP 服务动态提供**（`tools/list`），当前版本 40 个（平台 26 + 机械 11 + 诊断 2 + 启动器侧 1），随版本演进可能增减。工具名称、参数与输入 schema 一律**以 MCP 服务返回为准**，本文档不再重复罗列。
+- 全部工具由 **MCP 服务动态提供**（`tools/list`），当前版本 41 个（平台 27 + 机械 11 + 诊断 2 + 启动器侧 1），随版本演进可能增减。工具名称、参数与输入 schema 一律**以 MCP 服务返回为准**，本文档不再重复罗列。
 
 > 启动器侧的两个工具在 Python 未就绪时也可用：
 > `zwcad_wait_ready`（等待就绪）。诊断统一走 `zwcad_diagnose`，
@@ -148,7 +169,7 @@ zwcad_diagnose(probe_cad: false)
 - 调用前先查目标工具的 description 与 input schema，再按其说明传参（角度单位为弧度）。
 - 工具调用失败时优先读取返回的 `error` / `code` / `hint` 字段，并结合「常见错误场景」排查。
 
-> **参考信息源**：本 Skill 涉及的工具详细说明、类型库加载机制与重要说明，以连接器内随包的 README 为准，位于 `node_modules/zwcad-mcp/README.md`；与其同源的完整版（含 39 个 Python 侧工具逐项说明、类型库 5 级回退策略）见项目仓库的 `README.md`。
+> **参考信息源**：本 Skill 涉及的工具详细说明、类型库加载机制与重要说明，以连接器内随包的 README 为准，位于 `node_modules/zwcad-mcp/README.md`；与其同源的完整版（含 40 个 Python 侧工具逐项说明、类型库 5 级回退策略）见项目仓库的 `README.md`。
 >
 > 若改用 `pip install zwcad-mcp` 安装方式，则 README 位于对应 Python 环境的 `site-packages` 目录下，也可这样读取全文：
 >

@@ -43,6 +43,29 @@ jobs:
       - name: 校验 bridge.js 语法
         run: node --check bridge.js
 
+      # tools.json 是构建期从 Python 导出的静态清单，代理层靠它在 Python
+      # 未就绪时也能应答 tools/list。改 Python 工具后忘了重新导出，
+      # AI 看到的清单就会和实际不符，所以必须在 CI 里挡住。
+      - name: 安装 Python 依赖（供导出工具清单用）
+        shell: bash
+        run: |
+          python -m pip install --quiet --disable-pip-version-check \
+            'fastmcp>=2.10.3,<3' 'pyzwcad>=0.1' 'pyzwcadmech>=0.3.0' \
+            'comtypes>=1.1' 'pywin32>=305'
+
+      - name: 校验 tools.json 与 Python 工具一致
+        shell: bash
+        env:
+          PYTHONUTF8: '1'
+        run: |
+          python scripts/export-tools.py > /dev/null
+          if ! git diff --quiet tools.json; then
+            echo "::error::tools.json 与 Python 侧工具不一致，请执行 python scripts/export-tools.py 后提交"
+            git diff --stat tools.json
+            exit 1
+          fi
+          echo "tools.json 与 Python 工具一致"
+
       - name: 打包产物检查
         shell: bash
         run: |

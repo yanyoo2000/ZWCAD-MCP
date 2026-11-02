@@ -1,6 +1,6 @@
 {
   "name": "zwcad-mcp",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "中望CAD（ZWCAD）MCP 服务：用自然语言驱动 ZWCAD 二维平台与中望机械 CAD，完成绘图、标注、图层管理与机械图框/BOM 操作",
   "license": "MIT",
   "type": "commonjs",
@@ -21,6 +21,7 @@
   "scripts": {
     "doctor": "node bridge.js --doctor",
     "prepare-runtime": "node bridge.js --prepare",
+    "export-tools": "python scripts/export-tools.py",
     "build:connector": "node scripts/build-connector.js",
     "check:connector": "node scripts/build-connector.js --check",
     "test:errorlog": "node scripts/test-errorlog.js",
