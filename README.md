@@ -31,6 +31,40 @@ MCP 客户端 ──stdio──► bridge.js ──spawn──► python -m zwca
 - **Python 3.10+**（缺失时也会尝试 WorkBuddy 自带的 Python）
 - **Node.js 18+**
 
+## 获取方式
+
+本服务发布在 **npm 公共仓库**，不需要源码或本地构建即可使用。
+
+| 项目 | 地址 |
+|---|---|
+| **npm 包页** | https://www.npmjs.com/package/zwcad-mcp |
+| **包名** | `zwcad-mcp` |
+| **安装 / 启动** | `npx -y zwcad-mcp` |
+| **源码仓库** | https://github.com/yanyoo2000/ZWCAD-MCP |
+| **当前最新版** | `0.3.1` |
+
+直接安装到本地（可选，等价于 `npx` 效果）：
+
+```bash
+npm install -g zwcad-mcp
+zwcad-mcp --doctor
+```
+
+### 版本说明
+
+| 版本 | 关键变化 |
+|---|---|
+| `0.3.1` | 建立 PR 阶段 CI 与协作流程，修复打包混入编译缓存的问题 |
+| `0.3.0` | 新增 `zwcad_launch_cad`；`zwcad_manage_document` 支持 `open` 打开指定 DWG |
+| `0.2.4` | 连接器资源改为按 `connector/<平台>/<连接器>/` 组织，支持同平台多连接器 |
+| `0.2.2` | 新增诊断兜底与 `zwcad_wait_ready`，AI 可自助排查首次安装问题 |
+| `0.2.0` | **握手与安装解耦**：首次使用握手从 44 秒降至约 120 ms，Python 运行时转后台安装 |
+| `0.1.0` | 首个发布版本 |
+
+> 查看全部版本：`npm view zwcad-mcp versions`
+>
+> 固定版本（避免自动升级到不兼容版本）：把 `npx -y zwcad-mcp` 改为 `npx -y zwcad-mcp@0.3.1`
+
 ## 快速开始
 
 无需安装，客户端会自动拉起。把下面整段复制进 MCP 客户端的配置文件即可。
