@@ -4,6 +4,10 @@ node_modules/
 # 构建产物
 dist/
 *.tgz
+# 打包快照不属于源码（曾误提交过一次 ZWCAD-MCP.zip）
+*.zip
+*.rar
+*.7z
 
 # Python
 __pycache__/
