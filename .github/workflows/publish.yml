@@ -1,85 +1,28 @@
 name: Publish
 
-# 打 tag 即发布（tag 形如 v0.1.0）
-# 发布前会校验：tag 与 package.json 版本一致、连接器结构完整、安装冒烟测试通过
+# 打 tag 即发布（tag 形如 v0.3.0）。
+#
+# 校验逻辑不在这里重复，统一由 ci.yml 负责——同一份规则写两遍，
+# 迟早会口径不一致。这里只做「确认 ci.yml 通过 → 发 npm」。
 on:
   push:
     tags:
       - 'v*'
 
 jobs:
-  verify:
-    name: 校验
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: 校验 tag 与 package.json 版本一致
-        shell: bash
-        run: |
-          TAG="${GITHUB_REF#refs/tags/v}"
-          PKG=$(node -p "require('./package.json').version")
-          echo "tag=$TAG package.json=$PKG"
-          if [ "$TAG" != "$PKG" ]; then
-            echo "::error::tag ($TAG) 与 package.json 版本 ($PKG) 不一致"
-            exit 1
-          fi
-
-      - name: 校验各平台连接器结构
-        run: node scripts/build-connector.js --check
-
-      - name: 校验 Python 源码可编译
-        shell: bash
-        run: |
-          for f in runtime/zwcad2d/*.py; do
-            python -c "import ast,sys; ast.parse(open(sys.argv[1],encoding='utf-8-sig').read())" "$f"
-            echo "OK $f"
-          done
-
-      - name: 校验 bridge.js 语法
-        run: node --check bridge.js
-
-      # tools.json 是构建期从 Python 导出的静态清单，代理层靠它在 Python
-      # 未就绪时也能应答 tools/list。改 Python 工具后忘了重新导出，
-      # AI 看到的清单就会和实际不符，所以必须在 CI 里挡住。
-      - name: 安装 Python 依赖（供导出工具清单用）
-        shell: bash
-        run: |
-          python -m pip install --quiet --disable-pip-version-check \
-            'fastmcp>=2.10.3,<3' 'pyzwcad>=0.1' 'pyzwcadmech>=0.3.0' \
-            'comtypes>=1.1' 'pywin32>=305'
-
-      - name: 校验 tools.json 与 Python 工具一致
-        shell: bash
-        env:
-          PYTHONUTF8: '1'
-        run: |
-          python scripts/export-tools.py > /dev/null
-          if ! git diff --quiet tools.json; then
-            echo "::error::tools.json 与 Python 侧工具不一致，请执行 python scripts/export-tools.py 后提交"
-            git diff --stat tools.json
-            exit 1
-          fi
-          echo "tools.json 与 Python 工具一致"
-
-      - name: 打包产物检查
-        shell: bash
-        run: |
-          npm pack --silent 2>/dev/null | tail -1
-          echo "--- 包内文件 ---"
-          tar -tzf *.tgz | sort
+  # 复用 ci.yml 的校验流程：只有它全绿才继续发布。
+  # 这样打 tag 时不会绕过任何检查。
+  ci:
+    name: 复用 CI 校验
+    uses: ./.github/workflows/ci.yml
 
   publish:
     name: 发布到 npm
-    needs: verify
+    needs: ci
     runs-on: windows-latest
     permissions:
       contents: read
-      id-token: write # 用于 npm provenance
+      id-token: write # npm provenance 需要
     steps:
       - uses: actions/checkout@v4
 
@@ -87,18 +30,6 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-
-      - name: 发布前安装冒烟测试
-        shell: bash
-        run: |
-          # 从 tag 前的代码做一次最小验证：打包能被 npm 正常安装
-          npm pack --silent 2>/dev/null | tail -1
-          TGZ=$(ls *.tgz | head -1)
-          mkdir -p /tmp/smoke && cd /tmp/smoke
-          npm init -y >/dev/null 2>&1
-          npm install --no-audit --no-fund "$OLDPWD/$TGZ" >/dev/null 2>&1
-          test -f node_modules/zwcad-mcp/bridge.js
-          echo "冒烟测试通过：npm 包可正常安装"
 
       - name: 发布
         run: npm publish --provenance --access public

@@ -1,0 +1,114 @@
+name: CI
+
+# 所有改动都要过的检查。
+#
+# 触发时机：
+# - 向 main 提 PR：在合并前就发现问题，不等到打 tag 才发现
+# - push 到 main：防止直接推送绕过检查
+# - 打 tag：发布前再确认一次
+#
+# 与 publish.yml 的关系：publish 只负责「校验通过 → 发 npm」，
+# 校验逻辑统一放在这里，避免两份规则各写一遍导致口径不一致。
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['v*']
+  # 供 publish.yml 复用，避免校验规则写两遍
+  workflow_call:
+
+jobs:
+  verify:
+    name: 校验
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 安装 Python 依赖
+        shell: bash
+        run: |
+          python -m pip install --quiet --disable-pip-version-check \
+            'fastmcp>=2.10.3,<3' 'pyzwcad>=0.1' 'pyzwcadmech>=0.3.0' \
+            'comtypes>=1.1' 'pywin32>=305'
+
+      - name: 校验各平台连接器结构
+        run: node scripts/build-connector.js --check
+
+      - name: 校验 Python 源码可编译
+        shell: bash
+        run: |
+          for f in runtime/zwcad2d/*.py; do
+            python -c "import ast,sys; ast.parse(open(sys.argv[1],encoding='utf-8-sig').read())" "$f"
+            echo "OK $f"
+          done
+
+      - name: 校验 bridge.js 与 lib 语法
+        shell: bash
+        run: |
+          node --check bridge.js
+          for f in lib/*.js scripts/*.js; do
+            node --check "$f"
+            echo "OK $f"
+          done
+
+      # tools.json 是构建期从 Python 导出的静态清单，代理层靠它在 Python
+      # 未就绪时也能应答 tools/list。改 Python 工具后忘了重新导出，
+      # AI 看到的清单就会和实际不符，所以必须在 CI 里挡住。
+      - name: 校验 tools.json 与 Python 工具一致
+        shell: bash
+        env:
+          PYTHONUTF8: '1'
+        run: |
+          python scripts/export-tools.py > /dev/null
+          if ! git diff --quiet tools.json; then
+            echo "::error::tools.json 与 Python 侧工具不一致，请本地执行 python scripts/export-tools.py 后提交"
+            git diff --stat tools.json
+            exit 1
+          fi
+          echo "tools.json 与 Python 工具一致"
+
+      - name: 运行单元测试
+        run: npm test
+
+      - name: 打包产物检查
+        shell: bash
+        run: |
+          npm pack --silent 2>/dev/null | tail -1
+          echo "--- 包内文件 ---"
+          tar -tzf *.tgz | sort
+          # 编译缓存不应进包（曾因 .npmignore 规则写法不对漏进去过）
+          if tar -tzf *.tgz | grep -q '__pycache__'; then
+            echo "::error::发布包中混入了 __pycache__"
+            exit 1
+          fi
+
+      # tag 推送时才校验版本号，PR 和普通 push 没有 tag 可比
+      - name: 校验 tag 与 package.json 版本一致
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          PKG=$(node -p "require('./package.json').version")
+          echo "tag=$TAG package.json=$PKG"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag ($TAG) 与 package.json 版本 ($PKG) 不一致"
+            exit 1
+          fi
+          echo "版本一致"
+
+      - name: 冒烟测试（打包后能否被 npm 正常安装）
+        shell: bash
+        run: |
+          npm pack --silent 2>/dev/null | tail -1
+          TGZ=$(ls *.tgz | head -1)
+          mkdir -p /tmp/smoke && cd /tmp/smoke
+          npm init -y >/dev/null 2>&1
+          npm install --no-audit --no-fund "$OLDPWD/$TGZ" >/dev/null 2>&1
+          test -f node_modules/zwcad-mcp/bridge.js
+          test -f node_modules/zwcad-mcp/tools.json
+          echo "冒烟测试通过"
