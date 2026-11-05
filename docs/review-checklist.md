@@ -1,11 +1,13 @@
 # PR 审查流程与清单
 
-本文件是 ZWCAD-MCP 仓库的审查工作依据。每次收到 PR 审查任务，按本文件的顺序和清单执行，
-不凭印象、不跳步。
+本文件是本仓库的 PR 审查依据。按顺序和清单执行，不凭印象、不跳步。
 
-> **审查者的定位**：找出真实问题，不是走形式盖章。误报会消耗信任，漏报会造成事故。
-> **能力边界**：审查者不是 GitHub 账号，无法点击 Approve。审查意见写入 PR 评论，
-> 合并由仓库所有者执行。
+文中命令里的 `<owner>/<repo>` 与 `<N>` 是占位符，按实际仓库和 PR 号替换。
+
+> **审查的定位**：找出真实问题，不是走形式盖章。误报会消耗信任，漏报会造成事故。
+>
+> **适用场景**：人工 review、自动化审查、以及自己 review 自己的改动，
+> 三种都按同一套清单走。清单的作用是防止「看起来没问题」代替「检查过没问题」。
 
 ---
 
@@ -23,13 +25,13 @@
 curl -sS --noproxy '*' \
   -H "Authorization: Bearer $(gh auth token)" \
   -H "Accept: application/vnd.github+json" \
-  https://api.github.com/repos/yanyoo2000/ZWCAD-MCP/pulls/<N>
+  https://api.github.com/repos/<owner>/<repo>/pulls/<N>
 
 # 该分支 HEAD 的检查结论
 curl -sS --noproxy '*' \
   -H "Authorization: Bearer $(gh auth token)" \
   -H "Accept: application/vnd.github+json" \
-  https://api.github.com/repos/yanyoo2000/ZWCAD-MCP/commits/<head-sha>/check-runs
+  https://api.github.com/repos/<owner>/<repo>/commits/<head-sha>/check-runs
 ```
 
 **看三件事**：
@@ -45,7 +47,7 @@ curl -sS --noproxy '*' \
 ```bash
 curl -sS --noproxy '*' \
   -H "Authorization: Bearer $(gh auth token)" \
-  https://api.github.com/repos/yanyoo2000/ZWCAD-MCP/check-runs/<job-id>/annotations
+  https://api.github.com/repos/<owner>/<repo>/check-runs/<job-id>/annotations
 ```
 
 ### 第 2 步：读 diff（改动层）
@@ -55,7 +57,7 @@ curl -sS --noproxy '*' \
 curl -sS --noproxy '*' \
   -H "Authorization: Bearer $(gh auth token)" \
   -H "Accept: application/vnd.github.v3.diff" \
-  https://api.github.com/repos/yanyoo2000/ZWCAD-MCP/pulls/<N>
+  https://api.github.com/repos/<owner>/<repo>/pulls/<N>
 ```
 
 本地已 fetch 的话 `git show <sha>` 更顺手。读 diff 时先看 `--stat` 的改动面：
@@ -113,7 +115,7 @@ diff 只显示「变了什么」，不显示「为什么这么写」。以下情
 - [ ] 改了 CI 检查 → CONTRIBUTING 的「CI 会检查什么」表格更新了吗
 - [ ] 改了发布流程 → CONTRIBUTING 的「发布流程」章节更新了吗
 - [ ] 新增文件 → 是否需要进 `.npmignore` / `pyproject.toml` 的 include/exclude
-- [ ] 注释说的和代码做的一致吗（t1 就抓到过 `needs: [ci, npm]` 的注释与串行实际效果不符）
+- [ ] 注释说的和代码做的一致吗（曾抓到过 `needs: [ci, npm]` 的注释与串行实际效果不符）
 
 ### 维度 4：可维护性
 
@@ -413,7 +415,7 @@ curl -sS --noproxy '*' -X POST \
   -H "Accept: application/vnd.github+json" \
   -H "Content-Type: application/json; charset=utf-8" \
   --data-binary @/tmp/comment.json \
-  https://api.github.com/repos/yanyoo2000/ZWCAD-MCP/issues/<PR号>/comments
+  https://api.github.com/repos/<owner>/<repo>/issues/<PR号>/comments
 ```
 
 `/issues/<N>/comments` 对 PR 同样有效。返回 201 表示成功，响应里的 `html_url`
@@ -424,7 +426,7 @@ curl -sS --noproxy '*' -X POST \
 ```bash
 curl -sS --noproxy '*' \
   -H "Authorization: Bearer $(gh auth token)" \
-  https://api.github.com/repos/yanyoo2000/ZWCAD-MCP/issues/<PR号>/comments
+  https://api.github.com/repos/<owner>/<repo>/issues/<PR号>/comments
 ```
 
 确认评论内容完整（特别是中文没乱码，表格没断行）。
@@ -441,15 +443,15 @@ gh auth status
 # PR 元信息 / diff / 评论
 curl -sS --noproxy '*' -H "Authorization: Bearer $(gh auth token)" \
   -H "Accept: application/vnd.github+json" \
-  https://api.github.com/repos/yanyoo2000/ZWCAD-MCP/pulls/<N>
+  https://api.github.com/repos/<owner>/<repo>/pulls/<N>
 
 curl -sS --noproxy '*' -H "Authorization: Bearer $(gh auth token)" \
   -H "Accept: application/vnd.github.v3.diff" \
-  https://api.github.com/repos/yanyoo2000/ZWCAD-MCP/pulls/<N>
+  https://api.github.com/repos/<owner>/<repo>/pulls/<N>
 
 curl -sS --noproxy '*' -H "Authorization: Bearer $(gh auth token)" \
   -H "Accept: application/vnd.github+json" \
-  https://api.github.com/repos/yanyoo2000/ZWCAD-MCP/commits/<sha>/check-runs
+  https://api.github.com/repos/<owner>/<repo>/commits/<sha>/check-runs
 
 # 本地验证
 python scripts/sync-version.py --check
