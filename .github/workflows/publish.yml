@@ -44,12 +44,18 @@ jobs:
 
   pypi:
     name: 发布到 PyPI
-    needs: ci
+    # 依赖 npm：两个渠道要么一起成功，要么停在「npm 已发、PyPI 未发」的分裂状态。
+    # 让它串行在后面，失败时至少能立刻从 CI 结论看出是 PyPI 环节的问题。
+    needs: [ci, npm]
     runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/p/zwcad-mcp
     permissions:
+      # 显式声明 permissions 后，未列出的 scope 会降为 none。
+      # checkout 在公开仓库上靠匿名 clone 也能工作（实测 contents: none 时
+      # 该步骤仍成功），但显式给 read 更稳妥，也与上面的 npm job 保持一致。
+      contents: read
       id-token: write # Trusted Publishing，无需 API token
     steps:
       - uses: actions/checkout@v4

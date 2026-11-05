@@ -52,20 +52,41 @@ if not re.fullmatch(r'\d+\.\d+\.\d+', version):
 
 diffs = []
 
-# 1. pyproject.toml：用正则替换 [project] 段里的 version
+# 1. pyproject.toml：只替换 [project] 段内的 version
+#
+# 不能用一个 `\[project\][\s\S]*?version` 的正则：`[\s\S]*?` 不认段落边界，
+# 若 [project] 里没有 version，而后面某个 [tool.xxx] 里有裸 version，
+# 它会把错误位置的字段改掉并报告成功。先按行切出段再匹配，行为才可预测。
 with open(PYPROJECT, encoding='utf-8') as f:
     py = f.read()
 
-new_py, n = re.subn(
-    r'^(\[project\][\s\S]*?^version\s*=\s*)"[^"]*"',
-    lambda m: m.group(1) + '"' + version + '"',
-    py,
-    count=1,
-    flags=re.M,
-)
-if n == 0:
-    print('pyproject.toml 中未找到 [project] 段落的 version 字段')
+lines = py.split('\n')
+proj_start = None
+proj_end = len(lines)
+for i, line in enumerate(lines):
+    if re.match(r'^\[project\]\s*$', line):
+        proj_start = i + 1
+        continue
+    # 遇到下一个表头即结束
+    if proj_start is not None and re.match(r'^\[', line):
+        proj_end = i
+        break
+
+if proj_start is None:
+    print('pyproject.toml 中未找到 [project] 段')
     sys.exit(1)
+
+new_py = py
+for i in range(proj_start, proj_end):
+    m = re.match(r'^(version\s*=\s*)"[^"]*"', lines[i])
+    if m:
+        lines[i] = m.group(1) + '"' + version + '"'
+        new_py = '\n'.join(lines)
+        break
+else:
+    print('pyproject.toml 的 [project] 段内未找到 version 字段')
+    sys.exit(1)
+
 if new_py != py:
     diffs.append(('pyproject.toml', version))
     if not check_only:
