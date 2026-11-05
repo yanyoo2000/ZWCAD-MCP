@@ -124,6 +124,10 @@ PR 创建后自动运行（见 `.github/workflows/ci.yml`）：
 - **文档同步**：改了行为要更新 `README.md`，改了首次使用流程要更新 `connector/workbuddy/zwcad-mcp/skills/SKILL.md`
 - **不要引入无法回退的写入**：涉及删实体、覆盖保存、关闭文档的操作，保持与现有工具一致的安全约束
 
+完整的审查依据见 [`docs/review-checklist.md`](docs/review-checklist.md)：五维检查清单、
+本项目的 9 类特有陷阱（版本号同步、tools.json 一致性、双渠道发布等）、
+以及每条结论该用什么置信度表述。**提 PR 前按它自查一遍，能减少往返。**
+
 ## 发布流程（仅维护者）
 
 本仓库同时发布到 **npm** 和 **PyPI**，包名相同。发布由打 tag 触发。
