@@ -17,6 +17,14 @@ dependencies = [
     "pywin32>=305",
 ]
 
+# PyPI 包页侧栏的链接来源。没有这一段，PyPI 上就找不到源码仓库。
+# npm 侧的同类信息在 package.json 的 repository/bugs/homepage，两处需各自维护。
+[project.urls]
+Homepage = "https://github.com/yanyoo2000/ZWCAD-MCP"
+Repository = "https://github.com/yanyoo2000/ZWCAD-MCP"
+Issues = "https://github.com/yanyoo2000/ZWCAD-MCP/issues"
+Changelog = "https://github.com/yanyoo2000/ZWCAD-MCP/releases"
+
 [project.scripts]
 zwcad-mcp-python = "zwcad2d.server:main"
 

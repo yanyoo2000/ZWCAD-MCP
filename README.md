@@ -60,6 +60,8 @@ zwcad-mcp --doctor
 > PyPI 版 = 只有 Python 源码，**需要你自行准备 Python 3.10+ 和依赖**。
 > 两者工具集相同，版本号同步发布。
 
+源码、Issue 与更新日志见 [github.com/yanyoo2000/ZWCAD-MCP](https://github.com/yanyoo2000/ZWCAD-MCP)。
+
 ### 版本说明
 
 | 版本 | 关键变化 |
