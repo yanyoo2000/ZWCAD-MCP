@@ -144,11 +144,28 @@ function resolvePython() {
     });
     if (r.status === 0 && r.stdout) {
       const ver = r.stdout.trim();
-      log('使用 Python: ' + c + ' (' + ver + ')');
-      return c;
+      // 返回可执行文件的绝对路径：后面要用 sys.base_prefix 定位安装目录，
+      // 传相对名（如 "python"）会让后续的路径校验失去意义。
+      const abs = resolveExecutable(c);
+      log('使用 Python: ' + abs + ' (' + ver + ')');
+      return abs;
     }
   }
   fail('未找到可用的 Python，请用 --python 指定');
+}
+
+/** 把候选路径解析成真实可执行文件路径 */
+function resolveExecutable(c) {
+  if (path.isAbsolute(c)) return c;
+  const which = spawnSync(process.platform === 'win32' ? 'where' : 'which', [c], {
+    encoding: 'utf8',
+    timeout: 15000,
+  });
+  if (which.status === 0 && which.stdout) {
+    const first = which.stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)[0];
+    if (first && fs.existsSync(first)) return path.resolve(first);
+  }
+  return c;
 }
 
 /* ------------------------------------------------------------------ *
@@ -346,8 +363,33 @@ async function main() {
 
   // 3. 便携 Python
   const py = resolvePython();
+
+  // 不能靠 path.dirname(py) 推断 Python 安装目录：
+  // CI 上 setup-python 装的是嵌入式发行版，python.exe 可能在 PATH wrapper 里，
+  // dirname 会解析成仓库根目录，导致「把自己复制进自己的子目录」而 EINVAL。
+  // 让 Python 自己报告 sys.base_prefix 才可靠。
+  log('解析 Python 安装目录…');
+  const prefixOut = spawnSync(py, ['-c', 'import sys;print(sys.base_prefix)'], {
+    encoding: 'utf8',
+    timeout: 30000,
+  });
+  if (prefixOut.status !== 0 || !prefixOut.stdout) {
+    fail('无法获取 Python 安装目录');
+  }
+  const pyHome = path.resolve(prefixOut.stdout.trim());
+
+  if (!fs.existsSync(path.join(pyHome, 'python.exe'))) {
+    fail('Python 安装目录里没有 python.exe: ' + pyHome);
+  }
+
+  // 目标目录不能在自己的源目录里面，否则会无限递归
+  const rel = path.relative(pyHome, bundleDir);
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) {
+    fail('打包目录 ' + bundleDir + ' 位于 Python 安装目录 ' + pyHome + ' 内部，请换一个输出位置');
+  }
+
+  log('  源目录: ' + pyHome);
   log('复制 Python 运行时…');
-  const pyHome = path.dirname(py);
   const pyDest = path.join(bundleDir, 'python');
   fs.cpSync(pyHome, pyDest, { recursive: true });
 
