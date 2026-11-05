@@ -21,6 +21,15 @@ import os
 import re
 import sys
 
+# Windows 控制台默认是 GBK，输出中文标点会抛 UnicodeEncodeError。
+# 这个脚本在 CI（Windows runner）里跑，一旦抛异常就会以非零码退出，
+# 表现成「检查失败」——实际检查是通过的。必须强制 UTF-8。
+for stream in (sys.stdout, sys.stderr):
+    try:
+        stream.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PROJECT = os.path.dirname(ROOT)
 
