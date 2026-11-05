@@ -89,14 +89,9 @@ jobs:
           python -m build --wheel --outdir /tmp/pybuild
           WHEEL=$(ls /tmp/pybuild/*.whl | head -1)
           echo "构建产物: $WHEEL"
-          # 包内应是 zwcad2d/ 而非 runtime/，否则 import 会失败
-          python -c "
-          import sys, zipfile
-          names = zipfile.ZipFile(sys.argv[1]).namelist()
-          assert any(n.startswith('zwcad2d/') for n in names), '包内缺少 zwcad2d/'
-          assert not any(n.startswith('runtime/') for n in names), '包内误含 runtime/'
-          print('wheel 结构正确')
-          " "$WHEEL"
+          # 用独立脚本检查，避免 python -c 内联中文输出在 Windows
+          # runner 的 cp1252 编码下抛异常（会被误判为构建失败）
+          python scripts/check-wheel.py "$WHEEL"
 
       - name: 打包产物检查
         shell: bash
