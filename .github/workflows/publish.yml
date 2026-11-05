@@ -44,8 +44,10 @@ jobs:
 
   pypi:
     name: 发布到 PyPI
-    # 依赖 npm：两个渠道要么一起成功，要么停在「npm 已发、PyPI 未发」的分裂状态。
-    # 让它串行在后面，失败时至少能立刻从 CI 结论看出是 PyPI 环节的问题。
+    # 依赖 npm 是为了「npm 失败时 PyPI 不再单独跑」——避免反向分裂
+    # （PyPI 发出去、npm 没有）。它无法消除分裂本身：npm 一旦发出就不可撤回，
+    # 此时 PyPI 再失败，仍然是「npm 已发、PyPI 未发」。
+    # 真实收益是顺序确定：从 CI 结论能一眼看出卡在哪个渠道。
     needs: [ci, npm]
     runs-on: ubuntu-latest
     environment:

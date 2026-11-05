@@ -124,6 +124,46 @@ PR 创建后自动运行（见 `.github/workflows/ci.yml`）：
 - **文档同步**：改了行为要更新 `README.md`，改了首次使用流程要更新 `connector/workbuddy/zwcad-mcp/skills/SKILL.md`
 - **不要引入无法回退的写入**：涉及删实体、覆盖保存、关闭文档的操作，保持与现有工具一致的安全约束
 
+## 发布流程（仅维护者）
+
+本仓库同时发布到 **npm** 和 **PyPI**，包名相同。发布由打 tag 触发。
+
+### 发布前检查清单
+
+这几项是仓库外的前置条件，CI 查不出来，漏了就会发一半：
+
+| 检查项 | 怎么确认 |
+|---|---|
+| **PyPI Trusted Publisher 已配置** | https://pypi.org/manage/project/zwcad-mcp/settings/publishing/ 里存在：Owner `yanyoo2000`、Repository `ZWCAD-MCP`、Workflow `publish.yml`、Environment `pypi` |
+| **GitHub environment `pypi` 已建** | 仓库 Settings → Environments |
+| **npm token 有效** | 仓库 Secrets 里的 `NPM_TOKEN` 未过期（granular token 默认 90 天） |
+| **版本号已同步** | `python scripts/sync-version.py --check` 通过 |
+| **npm 上该版本不存在** | `npm view zwcad-mcp version` 比对；已存在的版本号无法重复发布 |
+
+### 发布步骤
+
+```bash
+# 1. 升版本（改 package.json 后同步其余三处）
+#    编辑 package.json 的 version
+python scripts/sync-version.py
+
+# 2. 提交并走 PR 合并到 main（分支保护要求）
+# 3. 打 tag 并推送，触发发布
+git tag v0.3.4 && git push origin v0.3.4
+```
+
+### 发布失败怎么补救
+
+**关键：不要重打已有 tag。** tag 已存在时重打会冲突，且 npm 会报版本重复。
+
+| 失败情况 | 正确做法 |
+|---|---|
+| npm 成功、PyPI 失败 | **只重跑那次 run 的 pypi job**（Actions 页面 → 该次运行 → 左侧 pypi job → Re-run jobs）。排查时注意：修复代码不会进入已发布的版本，只影响下一个版本 |
+| npm 失败、PyPI 未跑（因为依赖 npm） | 修复后**打新版本 tag**，不要复用旧 tag |
+| 两个都失败 | 修复后打新版本 tag |
+
+**为什么 PyPI 补发不能打新 tag**：如果 npm 已发出 0.3.3、PyPI 补发时打 v0.3.4，那 npm 会跳过「0.3.3 的修复内容」，两个渠道的 0.3.3 内容不一致。宁可重跑 job 让同一版本对齐。
+
 ## 关于机械功能
 
 `runtime/zwcad2d/server.py` 里分两类工具：
