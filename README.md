@@ -17,7 +17,11 @@
 
 ## 获取方式
 
-发布在 npm：https://www.npmjs.com/package/zwcad-mcp
+同一个服务，两条发布渠道，工具集与版本号完全一致。
+
+### npm
+
+包页：https://www.npmjs.com/package/zwcad-mcp
 
 ```bash
 npx -y zwcad-mcp           # 免安装，客户端会用它拉起服务
@@ -25,12 +29,19 @@ npm install -g zwcad-mcp   # 或装到本地
 zwcad-mcp --doctor         # 环境诊断
 ```
 
-> 同时发布在 PyPI（`pip install zwcad-mcp`），但**它是精简版**：
-> 只有 Python 源码，需要你自备 Python 环境，不含下文描述的 Node 启动器。
-> 本页按 npm 版书写。
+### PyPI
 
-源码、Issue 与更新日志见 [github.com/yanyoo2000/ZWCAD-MCP](https://github.com/yanyoo2000/ZWCAD-MCP)。
+包页：https://pypi.org/project/zwcad-mcp/
 
+```bash
+pip install zwcad-mcp
+python -m zwcad2d          # 以 stdio 方式启动 MCP 服务
+```
+
+> **两者区别**：npm 版含 Node 启动器，会自动准备 Python 环境，适合客户端只保证有 Node 的场景；
+> PyPI 版只有 Python 源码，**需要你自备 Python 3.10+ 和依赖**，不含下文的启动器。
+> 本页按 npm 版书写；PyPI 版的完整说明见
+> [README-pypi.md](https://github.com/yanyoo2000/ZWCAD-MCP/blob/main/README-pypi.md)。
 
 ### 版本说明
 
