@@ -52,7 +52,7 @@ if not re.fullmatch(r'\d+\.\d+\.\d+', version):
 
 diffs = []
 
-# 1. pyproject.toml：只替换 [project] 段内的 version
+# 1. pyproject.toml：只替换 [project] 段（含其子表）内的 version
 #
 # 不能用一个 `\[project\][\s\S]*?version` 的正则：`[\s\S]*?` 不认段落边界，
 # 若 [project] 里没有 version，而后面某个 [tool.xxx] 里有裸 version，
@@ -67,8 +67,14 @@ for i, line in enumerate(lines):
     if re.match(r'^\[project\]\s*$', line):
         proj_start = i + 1
         continue
-    # 遇到下一个表头即结束
-    if proj_start is not None and re.match(r'^\[', line):
+    if proj_start is None:
+        continue
+
+    # [project.urls] / [project.optional-dependencies] 这类子表属于 [project]，
+    # 要继续往下找；只有遇到 [project] 之外的顶层表头才算段结束。
+    # 早先的实现把任何 `[...]` 都当结束，导致 version 写在子表之后就找不到。
+    m = re.match(r'^\[([^\]]+)\]', line)
+    if m and not m.group(1).startswith('project.'):
         proj_end = i
         break
 
