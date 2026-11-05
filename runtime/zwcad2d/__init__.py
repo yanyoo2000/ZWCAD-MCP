@@ -5,4 +5,4 @@
 - 模块入口: `python -m zwcad2d`
 """
 
-__version__ = "0.3.8"
+__version__ = "0.3.9"
