@@ -22,6 +22,19 @@ if len(sys.argv) < 2:
 wheel = sys.argv[1]
 names = zipfile.ZipFile(wheel).namelist()
 
+# 关键文件必须齐全。只查目录前缀不够：hatch 的 include 配置若被改坏，
+# 可能保留 zwcad2d/ 却漏掉个别文件，前缀检查仍会通过，但 import 会失败。
+REQUIRED_FILES = [
+    'zwcad2d/__init__.py',
+    'zwcad2d/__main__.py',
+    'zwcad2d/server.py',
+]
+
+missing = [f for f in REQUIRED_FILES if f not in names]
+if missing:
+    print('FAIL: wheel 内缺少关键文件: ' + ', '.join(missing))
+    sys.exit(1)
+
 if not any(n.startswith('zwcad2d/') for n in names):
     print('FAIL: wheel 内缺少 zwcad2d/ 包目录')
     sys.exit(1)

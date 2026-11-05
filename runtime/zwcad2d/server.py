@@ -68,9 +68,12 @@ def _load_mechanical_class():
 
 from pyzwcad import ZwCAD, APoint
 from pyzwcad.types import aDouble, aInt
+from . import __version__
 from .hatch_info import extract_hatch_loops
 
-mcp = FastMCP(name="ZWCAD-2D MCP Server")
+# 把版本号传给 FastMCP，让客户端 initialize 响应里的 serverInfo.version
+# 反映真实版本；否则这个字段只会显示 fastmcp 自己的版本，排查时容易误判。
+mcp = FastMCP(name="ZWCAD-2D MCP Server", version=__version__)
 
 _styles_base_path_cache = None
 

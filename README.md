@@ -43,7 +43,7 @@ MCP 客户端 ──stdio──► bridge.js ──spawn──► python -m zwca
 | **包名** | `zwcad-mcp` |
 | **安装 / 启动** | `npx -y zwcad-mcp` |
 | **源码仓库** | https://github.com/yanyoo2000/ZWCAD-MCP |
-| **当前最新版** | `0.3.2` |
+| **当前最新版** | 见 [npm 包页](https://www.npmjs.com/package/zwcad-mcp)（不在此写死，避免文档漂移） |
 
 ```bash
 npm install -g zwcad-mcp    # 可选，等价于 npx 效果
@@ -76,13 +76,14 @@ zwcad-mcp --doctor
 
 > **关于 PyPI 上的 `0.1.0` ~ `0.1.4`**：那是早期纯 Python 版本的独立发布线，
 > 与 npm 版的 `0.1.x` **不是同一批产物**。从 `0.3.2` 起两条渠道的版本号才统一。
-> 现在两边都是 `0.3.2`，请以这个版本为准。
-
-> 查看全部版本：`npm view zwcad-mcp versions` / `pip index versions zwcad-mcp`
+>
+> 查看当前版本：`npm view zwcad-mcp version` / `pip index versions zwcad-mcp`
 >
 > 固定版本（避免自动升级到不兼容版本）：
-> - npm：`npx -y zwcad-mcp@0.3.2`
-> - pip：`pip install zwcad-mcp==0.3.2`
+> - npm：`npx -y zwcad-mcp@<版本>`
+> - pip：`pip install zwcad-mcp==<版本>`
+>
+> 把 `<版本>` 换成上一条命令查到的具体版本号。
 
 ## 快速开始
 
