@@ -10,6 +10,14 @@ import subprocess
 import sys
 import time
 
+# Windows 控制台默认 GBK，输出中文会抛 UnicodeEncodeError 导致非零退出码。
+# 本脚本在 CI 的 Windows runner 上跑，必须强制 UTF-8。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PROJECT = os.path.dirname(ROOT)
 OUT = os.path.join(PROJECT, 'tools.json')
