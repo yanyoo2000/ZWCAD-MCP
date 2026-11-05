@@ -123,6 +123,11 @@ PR 创建后自动运行（见 `.github/workflows/ci.yml`）：
 - **错误处理**：工具内部异常要用 `_err()` 包装，返回结构化错误而非抛异常
 - **文档同步**：改了行为要更新 `README.md`，改了首次使用流程要更新 `connector/workbuddy/zwcad-mcp/skills/SKILL.md`
 - **不要引入无法回退的写入**：涉及删实体、覆盖保存、关闭文档的操作，保持与现有工具一致的安全约束
+- **不要在 README 写逐版本流水账**：版本历史由 GitHub Releases 自动生成
+  （`publish.yml` 里的 `generate_release_notes: true` 会列出每个 PR 并附 diff 链接），
+  npm 与 PyPI 包页也各有版本列表。README 里再抄一份就是第四份重复，
+  而且是唯一需要手工维护的——实践过一次，16 个版本只覆盖了 11 个，
+  两天就漂了 2 个。需要时只保留「怎么查当前版本」和指向 Releases 的链接。
 
 完整的审查依据见 [`docs/review-checklist.md`](docs/review-checklist.md)：五维检查清单、
 本项目的 9 类特有陷阱（版本号同步、tools.json 一致性、双渠道发布等）、

@@ -98,29 +98,25 @@ zwcad-mcp-<版本>-win-x64-offline/
 
 ### 版本说明
 
-| 版本 | 关键变化 |
-|---|---|
-| `0.3.7` | 离线包正式可用；npm / PyPI / 离线包三渠道版本号统一 |
-| `0.3.6` | 新增离线包构建（自带 Python 与依赖，零网络依赖） |
-| `0.3.5` | README 拆分，PyPI 页面改用专用版本 |
-| `0.3.2` | 从 `0.3.2` 起 npm 与 PyPI 版本号同步；CI 同时发布两个渠道 |
-| `0.3.1` | 建立 PR 阶段 CI 与协作流程，修复打包混入编译缓存的问题 |
-| `0.3.0` | 新增 `zwcad_launch_cad`；`zwcad_manage_document` 支持 `open` 打开指定 DWG |
-| `0.2.4` | 连接器资源改为按 `connector/<平台>/<连接器>/` 组织，支持同平台多连接器 |
-| `0.2.2` | 新增诊断兜底与 `zwcad_wait_ready`，AI 可自助排查首次安装问题 |
-| `0.2.0` | **握手与安装解耦**：首次使用握手从 44 秒降至约 120 ms，Python 运行时转后台安装 |
-| `0.1.0` | 首个发布版本 |
+查看当前版本：
+
+```bash
+npm view zwcad-mcp version       # npm 渠道
+pip index versions zwcad-mcp     # PyPI 渠道
+```
+
+固定版本（避免自动升级到不兼容版本）：
+
+```bash
+npx -y zwcad-mcp@<版本>          # 把 <版本> 换成上面查到的具体版本号
+pip install zwcad-mcp==<版本>
+```
+
+各版本的具体变更见 [Releases](https://github.com/yanyoo2000/ZWCAD-MCP/releases)——
+每次发布都由 CI 自动列出「改动了哪些 PR」并附完整 diff 链接。
 
 > **关于 PyPI 上的 `0.1.0` ~ `0.1.4`**：那是早期纯 Python 版本的独立发布线，
 > 与 npm 版的 `0.1.x` **不是同一批产物**。从 `0.3.2` 起两条渠道的版本号才统一。
->
-> 查看当前版本：`npm view zwcad-mcp version` / `pip index versions zwcad-mcp`
->
-> 固定版本（避免自动升级到不兼容版本）：
-> - npm：`npx -y zwcad-mcp@<版本>`
-> - pip：`pip install zwcad-mcp==<版本>`
->
-> 把 `<版本>` 换成上一条命令查到的具体版本号。
 
 ## 快速开始
 
