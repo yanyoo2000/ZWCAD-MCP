@@ -27,7 +27,8 @@
     "test:errorlog": "node scripts/test-errorlog.js",
     "test:rotation": "node scripts/test-rotation.js",
     "test": "node scripts/test-errorlog.js && node scripts/test-rotation.js",
-    "prepack": "node scripts/build-connector.js --check"
+    "prepack": "node scripts/build-connector.js --check",
+    "build:offline": "node scripts/build-offline.js"
   },
   "engines": {
     "node": ">=18"

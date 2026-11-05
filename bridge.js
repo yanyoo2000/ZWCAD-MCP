@@ -48,6 +48,46 @@ const CONNECTOR_DIR = __dirname;
 /** 随连接器一起分发的 Python 源码目录（若有，则免去从 PyPI 安装本包） */
 const VENDORED_SRC = path.join(CONNECTOR_DIR, 'runtime');
 
+/* ------------------------------------------------------------------ *
+ * 离线模式
+ *
+ * 打包好的离线包自带便携式 Python 与全部依赖，解压即用，不联网、
+ * 不探测系统 Python、不建 venv。判定依据是同级目录下存在 python/python.exe。
+ *
+ * 离线包目录结构（由 scripts/build-offline.js 生成）：
+ *   zwcad-mcp-<ver>-win-x64-offline/
+ *   ├── bridge.js
+ *   ├── lib/
+ *   ├── tools.json
+ *   ├── runtime/zwcad2d/           Python 源码
+ *   ├── python/                    便携式 Python（含标准库）
+ *   └── site-packages/             预装的全部依赖
+ * ------------------------------------------------------------------ */
+const OFFLINE_PYTHON = path.join(CONNECTOR_DIR, 'python', 'python.exe');
+const OFFLINE_SITE_PACKAGES = path.join(CONNECTOR_DIR, 'site-packages');
+
+/** 是否处于离线包内 */
+function isOfflineBundle() {
+  return fs.existsSync(OFFLINE_PYTHON) && fs.existsSync(OFFLINE_SITE_PACKAGES);
+}
+
+/**
+ * 构造离线模式的 PYTHONPATH。
+ *
+ * 不能只加 site-packages：pywin32 的模块与 DLL 分散在三个子目录里，
+ * 少一个就会报 ModuleNotFoundError: No module named 'pywintypes'。
+ */
+function offlinePythonPath() {
+  return [
+    OFFLINE_SITE_PACKAGES,
+    path.join(OFFLINE_SITE_PACKAGES, 'win32', 'lib'),   // pywintypes.py / pythoncom.py
+    path.join(OFFLINE_SITE_PACKAGES, 'win32'),           // .pyd 扩展
+    path.join(OFFLINE_SITE_PACKAGES, 'pywin32_system32'), // pywintypes313.dll 等
+    path.join(CONNECTOR_DIR, 'python'),                  // 标准库
+    path.join(CONNECTOR_DIR, 'runtime'),                 // 本包源码
+  ].join(path.delimiter);
+}
+
 /** 运行时状态目录：虚拟环境与安装标记都放这里，卸载时删掉即可 */
 const STATE_DIR = path.join(os.homedir(), '.workbuddy', 'zwcad-mcp-runtime');
 const VENV_DIR = path.join(STATE_DIR, 'venv');
@@ -414,6 +454,11 @@ async function installDeps(venvPython) {
  * 准备运行时：确保 venv + 依赖就绪，返回 venv python 路径。
  */
 async function prepareRuntime() {
+  // 离线包：Python 与依赖都已随包分发，直接用，不探测也不联网
+  if (isOfflineBundle()) {
+    return OFFLINE_PYTHON;
+  }
+
   const base = resolvePython();
   const fingerprint = installFingerprint(base.version);
   const venvPython = await ensureVenv(base);
@@ -449,11 +494,17 @@ async function prepareRuntime() {
  */
 function startWithProxy() {
   const { createProxy } = require('./lib/proxy');
+  const offline = isOfflineBundle();
+  if (offline) {
+    log('以离线包模式启动（自带 Python 与依赖，不联网）');
+  }
   createProxy({
     cwd: CONNECTOR_DIR,
     version: pkgVersion(),
     childArgs: ['-m', ENTRY_MODULE],
     log,
+    // 离线包需要把 pywin32 的分散目录一起注入，否则 import pythoncom 失败
+    extraPythonPath: offline ? offlinePythonPath : undefined,
     ensureRuntime: async () => {
       // 每次都要重新探测：用户可能刚装了 Python 或修好了环境
       const py = await prepareRuntime();
@@ -476,6 +527,47 @@ function pkgVersion() {
 
 function doctor() {
   log('连接器目录：' + CONNECTOR_DIR);
+
+  // 离线包：诊断对象完全不同——不探测系统 Python、不检查 venv，
+  // 只确认自带的 Python 与依赖是否完好。
+  if (isOfflineBundle()) {
+    log('运行模式：离线包（自带 Python 与依赖，不联网）');
+    const ver = pythonVersion(OFFLINE_PYTHON);
+    log('--- 自带 Python ---');
+    log('  路径：' + OFFLINE_PYTHON + '（' + (ver ? 'Python ' + ver.join('.') : '无法运行') + '）');
+
+    log('--- 依赖目录 ---');
+    log('  路径：' + OFFLINE_SITE_PACKAGES);
+
+    log('--- 逐项导入验证 ---');
+    const offlineEnv = {
+      ...process.env,
+      PYTHONUTF8: '1',
+      PYTHONIOENCODING: 'utf-8',
+      PYTHONNOUSERSITE: '1',
+      PYTHONPATH: offlinePythonPath(),
+    };
+    for (const mod of VERIFY_IMPORTS) {
+      // tryRun 成功返回 stdout（可能为空串），失败返回 null
+      const out = tryRun(OFFLINE_PYTHON, ['-c', 'import ' + mod], {
+        env: offlineEnv,
+        timeout: 60000,
+      });
+      log('  ' + (out !== null ? '[OK]   ' : '[失败] ') + mod);
+    }
+
+    log('--- 错误日志 ---');
+    const lf = logFilePath();
+    if (fs.existsSync(lf)) {
+      const st = fs.statSync(lf);
+      log('  路径：' + lf);
+      log('  大小：' + (st.size / 1024).toFixed(1) + ' KB');
+    } else {
+      log('  暂无错误日志（说明没有失败记录）');
+    }
+    return;
+  }
+
   log('运行时状态目录：' + STATE_DIR);
   log('随包源码：' + (vendoredSrcOrNull() || '（无，将使用已安装的 zwcad-mcp 包）'));
   log('--- Python 候选 ---');
