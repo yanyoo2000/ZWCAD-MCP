@@ -8,59 +8,29 @@
 > 诊断统一走 `zwcad_diagnose`：Python 已就绪时返回完整诊断，
 > 未就绪时自动降级为启动器视角（含错误日志与环境信息）并标注未检测项。
 
-## 为什么需要 Node 启动器
-
-本服务的业务逻辑是 Python 写的——它通过 Windows COM 驱动 ZWCAD，这部分**无法在 Node 侧等价重写**（COM 类型库解析、SAFEARRAY 编组等能力依赖 `comtypes`）。
-
-而客户端环境通常只保证有 Node，不保证有可用的 Python 依赖。所以本包用一个 Node 启动器抹平差异：
-
-```
-MCP 客户端 ──stdio──► bridge.js ──spawn──► python -m zwcad2d
-```
-
-启动器自动完成三件事，用户无感：
-
-1. **定位 Python** —— 优先 WorkBuddy 自带，其次系统 Python（需 >= 3.10）
-2. **准备隔离环境** —— 首次运行在 `%USERPROFILE%\.workbuddy\zwcad-mcp-runtime\` 建 venv 装依赖（约 30~60 秒），之后复用
-3. **托管服务进程** —— 启动 MCP Server 并原样转发 stdin/stdout
-
 ## 环境要求
 
 - **Windows 10/11 x64**
 - **中望CAD 或 中望机械CAD** 已启动，且至少打开一张 DWG
-- **Python 3.10+**（缺失时也会尝试 WorkBuddy 自带的 Python）
+- **Python 3.10+**（缺失时会尝试 WorkBuddy 自带的 Python）
 - **Node.js 18+**
 
 ## 获取方式
 
-本服务同时发布到 **npm** 和 **PyPI**，包名相同。**推荐用 npm 方式**——它自带 Node 启动器，能自动准备 Python 运行时，首次使用体验最好。
-
-### 方式一：npm（推荐）
-
-| 项目 | 地址 |
-|---|---|
-| **npm 包页** | https://www.npmjs.com/package/zwcad-mcp |
-| **包名** | `zwcad-mcp` |
-| **安装 / 启动** | `npx -y zwcad-mcp` |
+发布在 npm：https://www.npmjs.com/package/zwcad-mcp
 
 ```bash
-npm install -g zwcad-mcp    # 可选，等价于 npx 效果
-zwcad-mcp --doctor
+npx -y zwcad-mcp           # 免安装，客户端会用它拉起服务
+npm install -g zwcad-mcp   # 或装到本地
+zwcad-mcp --doctor         # 环境诊断
 ```
 
-### 方式二：PyPI（纯 Python，需自备依赖环境）
-
-| 项目 | 地址 |
-|---|---|
-| **PyPI 包页** | https://pypi.org/project/zwcad-mcp/ |
-| **包名** | `zwcad-mcp` |
-| **安装 / 启动** | `pip install zwcad-mcp` 然后 `python -m zwcad2d` |
-
-> **两者区别**：npm 版 = Node 启动器 + Python 源码，会自动创建隔离环境并装依赖；
-> PyPI 版 = 只有 Python 源码，**需要你自行准备 Python 3.10+ 和依赖**。
-> 两者工具集相同，版本号同步发布。
+> 同时发布在 PyPI（`pip install zwcad-mcp`），但**它是精简版**：
+> 只有 Python 源码，需要你自备 Python 环境，不含下文描述的 Node 启动器。
+> 本页按 npm 版书写。
 
 源码、Issue 与更新日志见 [github.com/yanyoo2000/ZWCAD-MCP](https://github.com/yanyoo2000/ZWCAD-MCP)。
+
 
 ### 版本说明
 
