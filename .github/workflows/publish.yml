@@ -26,6 +26,11 @@ jobs:
     name: 发布到 npm
     needs: ci
     runs-on: windows-latest
+    # 声明 environment 才会出现在仓库首页的 Deployments 里。
+    # 纯展示用途，不要给它加保护规则（审批/等待），否则发布会卡住等人。
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/zwcad-mcp
     permissions:
       contents: read
       id-token: write # npm provenance 需要
@@ -91,6 +96,9 @@ jobs:
     name: 构建离线包并发布 Release
     needs: ci
     runs-on: windows-latest
+    environment:
+      name: release
+      url: https://github.com/yanyoo2000/ZWCAD-MCP/releases
     permissions:
       contents: write # 上传 Release 附件需要
     steps:
