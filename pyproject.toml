@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zwcad-mcp"
-version = "0.3.6"
+version = "0.3.7"
 description = "MCP server driving ZWCAD platform and ZWCAD Mechanical via COM"
 # PyPI 页面用独立 README：主 README 讲 npm 启动器，对 pip 用户是噪音。
 # 两份文件各管一摊，见 CONTRIBUTING 的「文档分工」。
