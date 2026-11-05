@@ -33,7 +33,9 @@ MCP 客户端 ──stdio──► bridge.js ──spawn──► python -m zwca
 
 ## 获取方式
 
-本服务发布在 **npm 公共仓库**，不需要源码或本地构建即可使用。
+本服务同时发布到 **npm** 和 **PyPI**，包名相同。**推荐用 npm 方式**——它自带 Node 启动器，能自动准备 Python 运行时，首次使用体验最好。
+
+### 方式一：npm（推荐）
 
 | 项目 | 地址 |
 |---|---|
@@ -41,19 +43,30 @@ MCP 客户端 ──stdio──► bridge.js ──spawn──► python -m zwca
 | **包名** | `zwcad-mcp` |
 | **安装 / 启动** | `npx -y zwcad-mcp` |
 | **源码仓库** | https://github.com/yanyoo2000/ZWCAD-MCP |
-| **当前最新版** | `0.3.1` |
-
-直接安装到本地（可选，等价于 `npx` 效果）：
+| **当前最新版** | `0.3.2` |
 
 ```bash
-npm install -g zwcad-mcp
+npm install -g zwcad-mcp    # 可选，等价于 npx 效果
 zwcad-mcp --doctor
 ```
+
+### 方式二：PyPI（纯 Python，需自备依赖环境）
+
+| 项目 | 地址 |
+|---|---|
+| **PyPI 包页** | https://pypi.org/project/zwcad-mcp/ |
+| **包名** | `zwcad-mcp` |
+| **安装 / 启动** | `pip install zwcad-mcp` 然后 `python -m zwcad2d` |
+
+> **两者区别**：npm 版 = Node 启动器 + Python 源码，会自动创建隔离环境并装依赖；
+> PyPI 版 = 只有 Python 源码，**需要你自行准备 Python 3.10+ 和依赖**。
+> 两者工具集相同，版本号同步发布。
 
 ### 版本说明
 
 | 版本 | 关键变化 |
 |---|---|
+| `0.3.2` | 从 `0.3.2` 起 npm 与 PyPI 版本号同步；CI 同时发布两个渠道 |
 | `0.3.1` | 建立 PR 阶段 CI 与协作流程，修复打包混入编译缓存的问题 |
 | `0.3.0` | 新增 `zwcad_launch_cad`；`zwcad_manage_document` 支持 `open` 打开指定 DWG |
 | `0.2.4` | 连接器资源改为按 `connector/<平台>/<连接器>/` 组织，支持同平台多连接器 |
@@ -61,9 +74,15 @@ zwcad-mcp --doctor
 | `0.2.0` | **握手与安装解耦**：首次使用握手从 44 秒降至约 120 ms，Python 运行时转后台安装 |
 | `0.1.0` | 首个发布版本 |
 
-> 查看全部版本：`npm view zwcad-mcp versions`
+> **关于 PyPI 上的 `0.1.0` ~ `0.1.4`**：那是早期纯 Python 版本的独立发布线，
+> 与 npm 版的 `0.1.x` **不是同一批产物**。从 `0.3.2` 起两条渠道的版本号才统一。
+> 现在两边都是 `0.3.2`，请以这个版本为准。
+
+> 查看全部版本：`npm view zwcad-mcp versions` / `pip index versions zwcad-mcp`
 >
-> 固定版本（避免自动升级到不兼容版本）：把 `npx -y zwcad-mcp` 改为 `npx -y zwcad-mcp@0.3.1`
+> 固定版本（避免自动升级到不兼容版本）：
+> - npm：`npx -y zwcad-mcp@0.3.2`
+> - pip：`pip install zwcad-mcp==0.3.2`
 
 ## 快速开始
 
