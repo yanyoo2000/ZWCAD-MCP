@@ -42,8 +42,6 @@ MCP 客户端 ──stdio──► bridge.js ──spawn──► python -m zwca
 | **npm 包页** | https://www.npmjs.com/package/zwcad-mcp |
 | **包名** | `zwcad-mcp` |
 | **安装 / 启动** | `npx -y zwcad-mcp` |
-| **源码仓库** | https://github.com/yanyoo2000/ZWCAD-MCP |
-| **当前最新版** | 见 [npm 包页](https://www.npmjs.com/package/zwcad-mcp)（不在此写死，避免文档漂移） |
 
 ```bash
 npm install -g zwcad-mcp    # 可选，等价于 npx 效果
