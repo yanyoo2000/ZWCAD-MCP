@@ -10,14 +10,22 @@
 
 ## 环境要求
 
+通用（三条渠道都需要）：
+
 - **Windows 10/11 x64**
 - **中望CAD 或 中望机械CAD** 已启动，且至少打开一张 DWG
-- **Python 3.10+**（缺失时会尝试 WorkBuddy 自带的 Python）
-- **Node.js 18+**
+
+按渠道不同：
+
+| 渠道 | Python | Node.js |
+|---|---|---|
+| npm | 3.10+（缺失时会尝试 WorkBuddy 自带的 Python） | 18+ |
+| PyPI | 3.10+（自备） | 不需要 |
+| 离线包 | **不需要**（自带） | 推荐 18+，无 Node 时可用纯 Python 方式 |
 
 ## 获取方式
 
-同一个服务，两条发布渠道，工具集与版本号完全一致。
+同一个服务，三条发布渠道，工具集与版本号完全一致。
 
 ### npm
 
@@ -38,15 +46,63 @@ pip install zwcad-mcp
 python -m zwcad2d          # 以 stdio 方式启动 MCP 服务
 ```
 
-> **两者区别**：npm 版含 Node 启动器，会自动准备 Python 环境，适合客户端只保证有 Node 的场景；
-> PyPI 版只有 Python 源码，**需要你自备 Python 3.10+ 和依赖**，不含下文的启动器。
-> 本页按 npm 版书写；PyPI 版的完整说明见
-> [README-pypi.md](https://github.com/yanyoo2000/ZWCAD-MCP/blob/main/README-pypi.md)。
+### 离线包（内网 / 产线环境）
+
+发布页：https://github.com/yanyoo2000/ZWCAD-MCP/releases
+
+下载 `zwcad-mcp-<版本>-win-x64-offline.zip`，**解压即用**。
+
+适用于三种约束同时成立的机器：**没有 Python 环境、不能联网、不允许自行安装**。
+
+包内自带便携式 Python 与全部依赖，运行时不访问网络。解压后的结构：
+
+```
+zwcad-mcp-<版本>-win-x64-offline/
+├── bridge.js  lib/  tools.json      启动器
+├── runtime/zwcad2d/                 Python 源码
+├── python/                          便携式 Python
+├── site-packages/                   预装依赖
+├── mcp.json                         客户端配置模板
+└── 使用说明.txt
+```
+
+客户端配置（推荐，需要机器上有 Node.js）：
+
+```json
+{
+  "mcpServers": {
+    "zwcad-2d": {
+      "command": "node",
+      "args": ["<解压路径>\\bridge.js"]
+    }
+  }
+}
+```
+
+> 机器上没有 Node.js 时，可改用纯 Python 启动。包内 `使用说明.txt` 提供了
+> 填好全部 `PYTHONPATH` 的完整配置——**直接复制即可，不要手写**：
+> pywin32 的模块与 DLL 分散在三处，漏一段会报 `No module named 'pywintypes'`。
+
+> **三条渠道的区别**：
+>
+> | | npm | PyPI | 离线包 |
+> |---|---|---|---|
+> | 需要 Node.js | ✅ | ❌ | 推荐 |
+> | 需要 Python | 自动准备 | ✅ 自备 | ❌ 自带 |
+> | 需要联网 | 首次需要 | 安装时需要 | ❌ 不需要 |
+> | 适合场景 | 普通开发机 | 已有 Python 环境 | 内网 / 产线 |
+>
+> 本页按 npm 版书写；PyPI 版说明见
+> [README-pypi.md](https://github.com/yanyoo2000/ZWCAD-MCP/blob/main/README-pypi.md)，
+> 离线包部署细节见包内 `使用说明.txt`。
 
 ### 版本说明
 
 | 版本 | 关键变化 |
 |---|---|
+| `0.3.7` | 离线包正式可用；npm / PyPI / 离线包三渠道版本号统一 |
+| `0.3.6` | 新增离线包构建（自带 Python 与依赖，零网络依赖） |
+| `0.3.5` | README 拆分，PyPI 页面改用专用版本 |
 | `0.3.2` | 从 `0.3.2` 起 npm 与 PyPI 版本号同步；CI 同时发布两个渠道 |
 | `0.3.1` | 建立 PR 阶段 CI 与协作流程，修复打包混入编译缓存的问题 |
 | `0.3.0` | 新增 `zwcad_launch_cad`；`zwcad_manage_document` 支持 `open` 打开指定 DWG |
@@ -157,14 +213,18 @@ npx -y zwcad-mcp --prepare     # 只准备运行时后退出
 ## 仓库结构
 
 ```
-├── bridge.js                Node 启动器（npm bin 入口）
-├── runtime/zwcad2d/         Python 源码（本仓库为唯一源头）
-├── connector/               各平台连接器元数据
-│   ├── workbuddy/           connector-meta + mcp.json + icon + skills
-│   ├── cursor/              mcp.json
-│   └── claude/              mcp.json
-├── scripts/build-connector.js   扁平化构建各平台分发包
-└── pyproject.toml           Python 包定义（同时可发布到 PyPI）
+├── bridge.js                     Node 启动器（npm bin 入口，含离线模式判定）
+├── runtime/zwcad2d/              Python 源码（本仓库为唯一源头）
+├── connector/                    各平台连接器元数据
+│   ├── workbuddy/                connector-meta + mcp.json + icon + skills
+│   ├── cursor/                   mcp.json
+│   └── claude/                   mcp.json
+├── scripts/
+│   ├── build-connector.js        扁平化构建各平台分发包
+│   ├── build-offline.js          构建离线包（自带 Python 与依赖）
+│   ├── export-tools.py           从 Python 导出工具清单到 tools.json
+│   └── sync-version.py           同步四处版本号
+└── pyproject.toml                Python 包定义（发布到 PyPI）
 ```
 
 ## 开发
@@ -173,13 +233,23 @@ npx -y zwcad-mcp --prepare     # 只准备运行时后退出
 npm run doctor            # 环境诊断
 npm run build:connector   # 生成 dist/<platform>/ 可提交的分发包
 npm run check:connector   # 校验各平台源目录结构
+npm run build:offline     # 构建离线包到 dist-offline/
 ```
 
 `runtime/zwcad2d/` 是本项目的唯一源码位置。发布 npm 时随包分发，无需再从 PyPI 安装。
 
+> 本地 `build:offline` 用的是机器上的精简 Python，产物约 37 MB，仅供调试。
+> 对外发布的离线包由 CI 用官方 CPython 构建（约 77 MB），体积更大但兼容性更稳妥。
+
 ## 依赖
 
-安装时自动准备：`fastmcp`、`pyzwcad`、`pyzwcadmech`、`comtypes`、`pywin32`。
+Python 依赖：`fastmcp`、`pyzwcad`、`pyzwcadmech`、`comtypes`、`pywin32`。
+
+| 渠道 | 依赖怎么来 |
+|---|---|
+| npm | 启动器首次运行时自动创建 venv 并安装 |
+| PyPI | `pip install zwcad-mcp` 时自动装（`pyproject.toml` 已声明） |
+| 离线包 | **已预装**，无需任何操作 |
 
 第三方组件许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 

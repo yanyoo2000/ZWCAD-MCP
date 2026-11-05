@@ -130,7 +130,21 @@ PR 创建后自动运行（见 `.github/workflows/ci.yml`）：
 
 ## 发布流程（仅维护者）
 
-本仓库同时发布到 **npm** 和 **PyPI**，包名相同。发布由打 tag 触发。
+打 tag 会同时发布到**三个渠道**，版本号由 `scripts/sync-version.py` 保证一致：
+
+| 渠道 | 产物 | 面向 |
+|---|---|---|
+| **npm** | `zwcad-mcp-<ver>.tgz` | 普通开发机，`npx -y zwcad-mcp` |
+| **PyPI** | `zwcad_mcp-<ver>-py3-none-any.whl` | 已有 Python 环境 |
+| **GitHub Release** | `zwcad-mcp-<ver>-win-x64-offline.zip` | **内网 / 产线**，自带 Python 与依赖 |
+
+> 离线包由 `scripts/build-offline.js` 在 CI 里构建，约 77 MB。
+> 体积主要来自官方 CPython 完整发行版——**刻意不换精简版**，
+> 因为 `pywin32` 与 `comtypes` 深度依赖 Windows 组件，
+> 精简发行版省 40 MB 却可能引入难排查的兼容问题。
+>
+> 本地构建（`npm run build:offline`）用的是精简 Python，产物约 37 MB，
+> 仅供调试用。**对外发布以 CI 产物为准**。
 
 ### 发布前检查清单
 
@@ -143,6 +157,7 @@ PR 创建后自动运行（见 `.github/workflows/ci.yml`）：
 | **npm token 有效** | 仓库 Secrets 里的 `NPM_TOKEN` 未过期（granular token 默认 90 天） |
 | **版本号已同步** | `python scripts/sync-version.py --check` 通过 |
 | **npm 上该版本不存在** | `npm view zwcad-mcp version` 比对；已存在的版本号无法重复发布 |
+| **离线包 job 的 `contents: write` 权限** | `publish.yml` 的 `offline` job 需要该权限才能上传 Release 附件；缺了会在「上传到 GitHub Release」步骤失败，而此时 npm/PyPI 已经发成功了 |
 
 ### 发布步骤
 
@@ -163,10 +178,13 @@ git tag v0.3.4 && git push origin v0.3.4
 | 失败情况 | 正确做法 |
 |---|---|
 | npm 成功、PyPI 失败 | **只重跑那次 run 的 pypi job**（Actions 页面 → 该次运行 → 左侧 pypi job → Re-run jobs）。排查时注意：修复代码不会进入已发布的版本，只影响下一个版本 |
+| npm 成功、离线包失败 | 若失败在「构建离线包」步骤（脚本有 bug），**必须发新版本号**——重跑 job 带不上新的构建脚本。若只是「上传到 GitHub Release」失败（权限/网络），重跑即可 |
 | npm 失败、PyPI 未跑（因为依赖 npm） | 修复后**打新版本 tag**，不要复用旧 tag |
 | 两个都失败 | 修复后打新版本 tag |
 
 **为什么 PyPI 补发不能打新 tag**：如果 npm 已发出 0.3.3、PyPI 补发时打 v0.3.4，那 npm 会跳过「0.3.3 的修复内容」，两个渠道的 0.3.3 内容不一致。宁可重跑 job 让同一版本对齐。
+
+**离线包 job 的特殊性**：它依赖 `scripts/build-offline.js` 本身。脚本有 bug 时，单独重跑那个 job 用的还是旧脚本，所以只能发新版本号。这与 PyPI 补发的处理方式相反，判断依据是「失败原因在脚本还是在环境」。
 
 ## 关于机械功能
 

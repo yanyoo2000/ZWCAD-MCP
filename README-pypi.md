@@ -90,19 +90,21 @@ zwcad_diagnose(probe_cad: true)
 - 该接口自身 `cFuncs=0`、`cVars=0`，是无方法的空壳，**跳过不损失功能**
 - **处置**：确保 ZWCAD 已启动并打开 DWG，然后完全重启 MCP 客户端
 
-## 与 npm 版的区别
+## 三条渠道的对比
 
-同一个服务也发布在 npm（`npx -y zwcad-mcp`）。两者的**工具集与版本号完全一致**，区别在启动方式：
+同一个服务共发布三处，**工具集与版本号完全一致**，区别只在启动方式：
 
-| | PyPI 版（本页） | npm 版 |
-|---|---|---|
-| 启动 | `python -m zwcad2d` | `npx -y zwcad-mcp` |
-| Python 环境 | 需要你自备 3.10+ | 启动器自动探测并准备隔离 venv |
-| Node.js | 不需要 | 需要 18+ |
-| 首次启动耗时 | 即时 | 约 30~60 秒（后台装依赖），握手仅约 120 ms |
-| 内置诊断 | `zwcad_diagnose` | 额外提供 `zwcad_wait_ready` 与启动器视角诊断 |
+| 渠道 | 启动 | 需要 Python | 需要 Node | 需要联网 |
+|---|---|---|---|---|
+| **PyPI**（本页） | `python -m zwcad2d` | 3.10+ 自备 | ❌ | 安装时需要 |
+| **npm** | `npx -y zwcad-mcp` | 启动器自动准备 | 18+ | 首次需要 |
+| **离线包** | `node bridge.js` | ❌ 自带 | 推荐 18+ | ❌ 不需要 |
 
-如果你的机器已经有可用的 Python 环境，本页这套更轻：没有中间层，启动即用。
+如果你的机器已经有可用的 Python 环境，**本页这套更轻**：没有中间层，启动即用。
+
+如果你的机器**不能联网、没有 Python、也不允许自行安装**，用离线包：
+从 [Releases](https://github.com/yanyoo2000/ZWCAD-MCP/releases) 下载
+`zwcad-mcp-<版本>-win-x64-offline.zip`，解压即用。
 
 ## 源码与反馈
 
