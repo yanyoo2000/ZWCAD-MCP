@@ -23,3 +23,7 @@ Thumbs.db
 
 # 日志
 *.log
+
+# 离线包构建产物
+dist-offline/
+.offline-cache/

@@ -86,3 +86,62 @@ jobs:
       # 需要在 PyPI 项目设置里配置：本仓库 + 本 workflow 文件名。
       - name: 发布
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  offline:
+    name: 构建离线包并发布 Release
+    needs: ci
+    runs-on: windows-latest
+    permissions:
+      contents: write # 上传 Release 附件需要
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 离线包自带 Python 与依赖，面向「无 Python、无网络、不允许自行安装」
+      # 的产线机器。构建需要联网下载依赖，但产物本身零网络依赖。
+      - name: 构建离线包
+        run: node scripts/build-offline.js
+
+      - name: 校验产物
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          ZIP=$(ls dist-offline/*.zip | head -1)
+          echo "tag=$TAG zip=$ZIP"
+          case "$ZIP" in
+            *"$TAG"*) echo "版本一致" ;;
+            *) echo "::error::离线包版本与 tag ($TAG) 不一致"; exit 1 ;;
+          esac
+          ls -lh dist-offline/
+
+      - name: 上传到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-offline/*.zip
+          generate_release_notes: true
+          body: |
+            ## 安装方式
+
+            | 渠道 | 命令 |
+            |---|---|
+            | npm | `npx -y zwcad-mcp` |
+            | PyPI | `pip install zwcad-mcp` |
+            | **离线包** | 下载下方 `*-offline.zip`，解压即用 |
+
+            ### 离线包说明
+
+            面向**无 Python 环境、无外网、不允许自行安装**的产线机器：
+
+            - 自带便携式 Python 与全部依赖，**不需要联网**
+            - 解压后按包内 `使用说明.txt` 配置客户端
+            - 推荐用 `node bridge.js` 启动（自动处理 PYTHONPATH）
+            - 机器无 Node 时可用纯 Python 方式，配置见说明文件
+
+            > 离线包与 npm、PyPI 渠道版本号一致，工具集相同。
