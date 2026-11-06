@@ -7,7 +7,7 @@
   "description_en": "Drive ZWCAD 2D platform and ZWCAD Mechanical CAD with natural language: draw, query, annotate, and manage DWG drawings.",
   "source": "zwcad-mcp",
   "type": "mcp",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "minWorkbuddyVersion": "4.23.0",
   "auth_mode": "token",
   "examples_zh": [
