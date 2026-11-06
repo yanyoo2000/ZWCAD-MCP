@@ -19,9 +19,19 @@ pip install zwcad-mcp
 
 ## 运行
 
+三种方式等价，任选一种：
+
 ```bash
-python -m zwcad2d
+uvx zwcad-mcp              # 有 uv 时最省事，无需预装
+zwcad-mcp                  # pip 安装后的 console script
+python -m zwcad2d          # 模块方式，一定可用
 ```
+
+这是一个 stdio 方式的 MCP 服务，通常由客户端拉起，不需要你手动执行。
+
+> **给 Agent 平台接入**：如果平台托管 Python 环境，用 `uvx zwcad-mcp` 最直接——
+> 它会自动创建隔离环境、安装依赖并启动，平台不需要预装本包。
+> 若平台只能提供 Python 而不能保证有 uv，改用 `python -m zwcad2d`（需先 `pip install zwcad-mcp`）。
 
 这是一个 stdio 方式的 MCP 服务，通常由客户端拉起，不需要你手动执行。
 
