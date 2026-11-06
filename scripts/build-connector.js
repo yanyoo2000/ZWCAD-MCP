@@ -39,7 +39,11 @@ const DIST_DIR = path.join(ROOT, 'dist');
 const PLATFORMS = {
   workbuddy: {
     required: ['connector-meta.json', 'mcp.json', 'icon.png'],
-    optional: ['icon.svg', 'skills/SKILL.md'],
+    // token-schema.json 仅在 auth_mode: "token" 时需要。
+    // 我们用它承载「PyPI 镜像源」这一个真实配置项，同时满足平台
+    // 对 stdio 类型连接器的连接自测要求（无 auth_mode 会被判定为
+    // 远程服务并强制要求 HTTPS URL，而 stdio 本就不该有 URL）。
+    optional: ['icon.svg', 'skills/SKILL.md', 'token-schema.json'],
     exclude: ['README.md'],
   },
   cursor: {

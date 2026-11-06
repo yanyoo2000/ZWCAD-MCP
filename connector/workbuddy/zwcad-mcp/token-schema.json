@@ -1,0 +1,22 @@
+{
+  "title": "连接中望CAD",
+  "title_en": "Connect to ZWCAD",
+  "description": "本服务在你的电脑本地运行，通过 COM 接口操作已安装的中望CAD，图纸数据不会上传到任何服务器。首次连接会自动准备 Python 运行环境（约 40~60 秒），点「确认」后请稍候，期间请不要关闭 WorkBuddy。",
+  "description_en": "This connector runs locally on your computer and drives your installed ZWCAD through COM. No drawing data leaves your machine. The first connection prepares a Python runtime automatically (about 40-60s). Please keep WorkBuddy open while it finishes.",
+  "docUrl": "https://github.com/yanyoo2000/ZWCAD-MCP#readme",
+  "docLabel": "查看使用说明与环境要求",
+  "docLabel_en": "Read the setup guide",
+  "fields": [
+    {
+      "key": "ZWCAD_MCP_PIP_INDEX",
+      "label": "PyPI 镜像源（内网环境选填）",
+      "label_en": "PyPI mirror (optional, for intranet)",
+      "type": "text",
+      "required": false,
+      "defaultValue": "https://pypi.tuna.tsinghua.edu.cn/simple",
+      "placeholder": "https://pypi.tuna.tsinghua.edu.cn/simple",
+      "description": "首次启动需要下载几个 Python 依赖。如果你在公司内网、无法访问外网 PyPI，改成内部镜像地址即可。不清楚就保持默认值。",
+      "description_en": "Python dependencies are downloaded on first run. If you are on an intranet without access to public PyPI, replace this with your internal mirror. Keep the default if unsure."
+    }
+  ]
+}
