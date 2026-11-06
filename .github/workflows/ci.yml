@@ -75,6 +75,13 @@ jobs:
       - name: 运行单元测试
         run: npm test
 
+      # 「工具数」散落在 README、README-pypi、CONTRIBUTING、bridge.js 注释里。
+      # 加工具时漏改任何一处，文档就会自相矛盾（曾出现 README-pypi 写
+      # 「共计 41 个」但明细 27+11+2 只有 40，以及 GitHub 描述停在 39）。
+      # 权威值由脚本从 tools.json 与 PROXY_TOOLS 算出，不手写。
+      - name: 校验各处的工具数一致
+        run: node scripts/check-tool-count.js
+
       # 四处版本号必须一致：package.json（源头）、pyproject.toml、
       # runtime/zwcad2d/__init__.py、连接器元数据。
       # 不同步会让用户在 npm 和 PyPI 看到不同版本，误以为其中一个落后了。

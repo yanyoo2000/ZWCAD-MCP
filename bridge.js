@@ -393,7 +393,7 @@ function vendoredSrcOrNull() {
  * 本次实际需要安装的包清单。
  *
  * 若连接器内随包带了 Python 源码，则通过 PYTHONPATH 引入，无需再装 zwcad-mcp 本体；
- * 否则改为从 PyPI 安装 `zwcad-mcp`（它自带同样的 39 个工具）。
+ * 否则改为从 PyPI 安装 `zwcad-mcp`（它自带同样的 40 个工具）。
  */
 function requiredPackages() {
   return vendoredSrcOrNull() ? BASE_PACKAGES.slice() : BASE_PACKAGES.concat('zwcad-mcp');
