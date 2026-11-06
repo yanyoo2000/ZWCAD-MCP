@@ -42,9 +42,12 @@ zwcad-mcp --doctor         # 环境诊断
 包页：https://pypi.org/project/zwcad-mcp/
 
 ```bash
-pip install zwcad-mcp
-python -m zwcad2d          # 以 stdio 方式启动 MCP 服务
+uvx zwcad-mcp              # 有 uv 时最省事：自动建隔离环境、装依赖、启动
+pip install zwcad-mcp      # 或装到当前环境
+zwcad-mcp                  #   console script（与 python -m zwcad2d 等价）
 ```
+
+> `uvx` 方式不需要预先安装本包，适合 Agent 平台托管 Python 的场景。
 
 ### 离线包（内网 / 产线环境）
 

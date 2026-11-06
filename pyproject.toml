@@ -27,7 +27,14 @@ Repository = "https://github.com/yanyoo2000/ZWCAD-MCP"
 Issues = "https://github.com/yanyoo2000/ZWCAD-MCP/issues"
 Changelog = "https://github.com/yanyoo2000/ZWCAD-MCP/releases"
 
+# 两个名字指向同一入口：
+#   zwcad-mcp        —— uvx / pipx 直接按包名调用时用（uvx zwcad-mcp）
+#   zwcad-mcp-python —— 历史名，保留以免破坏已有的客户端配置
+# 当初只注册了 -python 后缀，因为 npm 包的 bin 也叫 zwcad-mcp；但两者
+# 分属不同包管理器，PATH 上的同名命令不会互相覆盖到不可用（都指向同一服务），
+# 而 uvx 按包名找可执行文件时只认与包名同名的那个。
 [project.scripts]
+zwcad-mcp = "zwcad2d.server:main"
 zwcad-mcp-python = "zwcad2d.server:main"
 
 # Python 源码位于 runtime/zwcad2d（与 npm 包共用同一份，不另存副本）
