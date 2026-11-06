@@ -7,8 +7,9 @@
   "description_en": "Drive ZWCAD 2D platform and ZWCAD Mechanical CAD with natural language: draw, query, annotate, and manage DWG drawings.",
   "source": "zwcad-mcp",
   "type": "mcp",
-  "version": "0.3.11",
-  "minWorkbuddyVersion": "4.22.15",
+  "version": "0.3.12",
+  "minWorkbuddyVersion": "4.23.0",
+  "auth_mode": "token",
   "examples_zh": [
     "在中望CAD中，以当前图纸原点为起点，画一条长度 100 的水平直线",
     "在中望CAD中，将当前图纸中所有红色圆移到新图层并改为蓝色",

@@ -9,7 +9,8 @@
         "zwcad-mcp"
       ],
       "env": {
-        "PYTHONUTF8": "1"
+        "PYTHONUTF8": "1",
+        "ZWCAD_MCP_PIP_INDEX": "${ZWCAD_MCP_PIP_INDEX}"
       },
       "timeout": 180000,
       "runtime": {
