@@ -39,7 +39,7 @@ node bridge.js --prepare
 └── scripts/               构建与测试脚本
 ```
 
-## 改动后必须做的三件事
+## 改动后必须做的四件事
 
 ### 1. 如果改了 Python 工具，必须重新导出 tools.json
 
@@ -53,15 +53,38 @@ python scripts/export-tools.py
 
 改了 `@mcp.tool` 装饰的函数、增删工具、改工具描述或参数，都要重新导出。CI 会比对两者，不一致直接失败。
 
-### 2. 跑本地检查
+### 2. 增删工具后，同步文档里的工具数
+
+```bash
+npm run check:toolcount    # 校验，不一致列出问题
+npm run fix:toolcount      # 自动修正总数
+```
+
+**为什么会有两个数字**——这不是笔误，是两个真实口径：
+
+| 口径 | 数值 | 谁在用 |
+|---|---|---|
+| `python` | `tools.json` 的条目数 | PyPI 版、`python -m zwcad2d`、源码本身 |
+| `user` | `python` + 代理层注入数 | npm 版、离线包 |
+
+启动器会额外注入 `zwcad_wait_ready`（用于等 Python 运行时就绪），所以走 bridge 的渠道比直接跑 Python 多一个。
+
+权威值由脚本从 `tools.json` 与 `lib/proxy.js` 的 `PROXY_TOOLS` 算出，**不要在脚本里手写数字**。加新声明位置时，在 `scripts/check-tool-count.js` 的 `CLAIMS` 里补一行并标注口径。
+
+> 明细求和也会校验：README 里写的「平台 27 + 机械 11 + 诊断 2 + 启动器侧 1」加起来必须等于声明的总数。曾出现过写「共计 41 个」但明细只有 40 的自相矛盾。
+
+> **GitHub 仓库描述（About）里不写工具数**。它不在仓库内，本地脚本扫不到，CI 也没有修改仓库设置的权限（`GITHUB_TOKEN` 不含 `administration` scope），一旦写死就只能靠人手动改——实践过一次，它停在 `39` 很久没动。About 只写描述性文字。
+
+### 3. 跑本地检查
 
 ```bash
 npm run check:connector    # 连接器目录结构
+npm run check:toolcount    # 各处声明的工具数
 npm test                   # 错误日志与轮转测试
 node --check bridge.js     # 语法
 ```
 
-### 3. 确认发布包干净
+### 4. 确认发布包干净
 
 ```bash
 npm pack --dry-run | grep -i pycache
