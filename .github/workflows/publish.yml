@@ -117,6 +117,14 @@ jobs:
       - name: 构建离线包
         run: node scripts/build-offline.js
 
+      # 同时挂 whl 与 sdist：内网环境无法访问 PyPI 时可直接下载后本地安装。
+      # 这一步与 pypi job 的构建重复，但换来「所有产物都在 Release 上」，
+      # 比用 artifact 跨 job 传递简单，几十秒的成本可以接受。
+      - name: 构建 wheel 与 sdist
+        run: |
+          python -m pip install --quiet --disable-pip-version-check build
+          python -m build
+
       - name: 校验产物
         shell: bash
         run: |
@@ -124,15 +132,24 @@ jobs:
           ZIP=$(ls dist-offline/*.zip | head -1)
           echo "tag=$TAG zip=$ZIP"
           case "$ZIP" in
-            *"$TAG"*) echo "版本一致" ;;
+            *"$TAG"*) echo "离线包版本一致" ;;
             *) echo "::error::离线包版本与 tag ($TAG) 不一致"; exit 1 ;;
           esac
-          ls -lh dist-offline/
+          WHEEL=$(ls dist/*.whl | head -1)
+          echo "wheel=$WHEEL"
+          case "$WHEEL" in
+            *"$TAG"*) echo "wheel 版本一致" ;;
+            *) echo "::error::wheel 版本与 tag ($TAG) 不一致"; exit 1 ;;
+          esac
+          ls -lh dist-offline/ dist/
 
       - name: 上传到 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist-offline/*.zip
+          files: |
+            dist-offline/*.zip
+            dist/*.whl
+            dist/*.tar.gz
           generate_release_notes: true
           body: |
             ## 安装方式
@@ -141,7 +158,9 @@ jobs:
             |---|---|
             | npm | `npx -y zwcad-mcp` |
             | PyPI | `pip install zwcad-mcp` |
-            | **离线包** | 下载下方 `*-offline.zip`，解压即用 |
+            | **uvx** | `uvx zwcad-mcp` |
+            | 离线包 | 下载下方 `*-offline.zip`，解压即用 |
+            | 本地 whl | 下载 `*.whl` 后 `uvx --from <文件路径> zwcad-mcp` |
 
             ### 离线包说明
 
