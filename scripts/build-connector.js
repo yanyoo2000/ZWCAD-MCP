@@ -35,6 +35,11 @@ const DIST_DIR = path.join(ROOT, 'dist');
  *
  * exclude：不进入分发包的文件。开发用的 README 只留在仓库里，
  * 不应混进要提交给平台审核的产物中（审核只认规范列出的那几个文件）。
+ *
+ * uploadable：该平台的产物是否需要打成 zip 上传到市场。
+ *   true  → 平台有发布审核流程，需要一个可上传的单文件包
+ *   false → 用户直接复制 mcp.json 内容，不需要包
+ * CI 据此遍历打包，而不是在 workflow 里写死平台名。
  */
 const PLATFORMS = {
   workbuddy: {
@@ -45,18 +50,21 @@ const PLATFORMS = {
     // 远程服务并强制要求 HTTPS URL，而 stdio 本就不该有 URL）。
     optional: ['icon.svg', 'skills/SKILL.md', 'token-schema.json'],
     exclude: ['README.md'],
+    uploadable: true,
   },
   cursor: {
     // Cursor 不需要打包，用户手动把 mcp.json 内容贴进 .cursor/mcp.json
     required: ['mcp.json'],
     optional: ['README.md'],
     exclude: [],
+    uploadable: false,
   },
   claude: {
     // Claude Desktop 同理，贴进 claude_desktop_config.json
     required: ['mcp.json'],
     optional: ['README.md'],
     exclude: [],
+    uploadable: false,
   },
 };
 
@@ -194,4 +202,28 @@ function countFiles(dir) {
   return n;
 }
 
-build(process.argv.includes('--check'));
+/**
+ * 列出需要打成 zip 上传的平台（供 CI 用）。
+ *
+ * CI 里不写死平台名，而是问这里要，将来新增可上传平台时只改
+ * PLATFORMS 的 uploadable 标记，workflow 不用动。
+ *
+ * 输出格式：每行一个 `平台:连接器名`，便于 shell 遍历。
+ */
+function listUploadable() {
+  const out = [];
+  for (const [platform, spec] of Object.entries(PLATFORMS)) {
+    if (!spec.uploadable) continue;
+    for (const connector of listConnectors(platform)) {
+      const r = validateConnector(platform, connector, spec);
+      if (r.ready) out.push(platform + ':' + connector);
+    }
+  }
+  for (const item of out) console.log(item);
+}
+
+if (process.argv.includes('--list-uploadable')) {
+  listUploadable();
+} else {
+  build(process.argv.includes('--check'));
+}

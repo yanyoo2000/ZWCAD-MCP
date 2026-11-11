@@ -36,7 +36,40 @@ node bridge.js --prepare
 │   └── server.py          MCP 服务与 40 个工具的实现
 ├── tools.json             ★ 从 Python 导出的工具清单（见下方「必须重新导出」）
 ├── connector/             各平台连接器元数据
+│   ├── workbuddy/         有发布审核流程，需要打成 zip 上传
+│   │   └── zwcad-mcp/
+│   ├── cursor/            用户自己把 mcp.json 贴进客户端配置，不需要包
+│   │   └── zwcad-mcp/
+│   └── claude/            同上
+│       └── zwcad-mcp/
 └── scripts/               构建与测试脚本
+```
+
+### 关于多平台连接器
+
+目录约定是 `connector/<平台>/<连接器名>/`。**两层都是可扩展的**：
+
+- **`<平台>`** 可以并列多个（workbuddy / cursor / claude / 将来新增）
+- **`<连接器名>`** 也可并列多个（`zwcad-mcp` / 将来的 `zwcad-mech-mcp` 等）
+
+构建产物同样按平台分层：`dist/<平台>/<连接器名>/`。
+
+**是否需要打成 zip 由 `scripts/build-connector.js` 的 `uploadable` 标记决定**：
+
+| 平台 | uploadable | 原因 |
+|---|---|---|
+| `workbuddy` | `true` | 有发布审核流程，需要一个可上传的单文件包 |
+| `cursor` / `claude` | `false` | 用户直接复制 `mcp.json` 内容，不需要包 |
+
+CI 不写死平台名，而是执行 `node scripts/build-connector.js --list-uploadable`
+拿到列表再逐个打包。**将来新增可上传平台时，只需在 `PLATFORMS` 里加一项
+并标 `uploadable: true`，workflow 不用改。**
+
+产物命名带平台名，避免多平台撞车：
+
+```
+zwcad-mcp-connector-workbuddy-1.2.0.zip
+zwcad-mcp-connector-<其他平台>-1.2.0.zip
 ```
 
 ## 改动后必须做的四件事
@@ -225,7 +258,7 @@ CI 里有一道校验会逐一比对，任何一处与 tag 不符就失败。
 
 所以：
 
-- **不要手填版本号**。下载 Release 里的 `zwcad-mcp-connector-<版本>.zip`，
+- **不要手填版本号**。下载 Release 里的 `zwcad-mcp-connector-<平台>-<版本>.zip`，
   它的 `connector-meta.json` 已经和该 tag 对齐。
 - 平台的表单如果要求填版本，填 tag 去掉 `v` 前缀后的部分（如 `v1.2.0` → `1.2.0`）。
 - 每次发版后重新下载最新的连接器包，不要复用旧的。

@@ -164,23 +164,41 @@ jobs:
 
           ls -lh dist-offline/ dist/
 
-      # 打成单一 zip，方便直接上传到开放平台的发布表单。
+      # 把需要上传市场的连接器打成单一 zip。
+      #
+      # 平台名不写死：问 build-connector.js 要 uploadable 列表。
+      # 将来新增可上传平台时，只改 PLATFORMS 里的 uploadable 标记，
+      # 这个 workflow 不用动。
+      #
       # 平台要求包根目录下直接是 connector-meta.json / mcp.json / icon.png，
-      # 所以从 zwcad-mcp 目录内部打包，不要多套一层。
-      - name: 打包 WorkBuddy 连接器
+      # 所以从连接器目录内部打包，不要多套一层。
+      - name: 打包需上传的连接器
         shell: pwsh
         run: |
-          $src = 'dist\workbuddy\zwcad-mcp'
-          if (-not (Test-Path $src)) { Write-Error "找不到 $src"; exit 1 }
           $tag = $env:GITHUB_REF -replace '^refs/tags/v', ''
-          $out = "zwcad-mcp-connector-$tag.zip"
-          if (Test-Path $out) { Remove-Item $out -Force }
-          Compress-Archive -Path "$src\*" -DestinationPath $out -CompressionLevel Optimal
-          Write-Output "生成 $out"
-          Get-ChildItem $out | ForEach-Object { Write-Output ("  {0:N1} KB" -f ($_.Length/1KB)) }
-          Write-Output "--- 包内文件 ---"
+          $items = node scripts/build-connector.js --list-uploadable
+          if (-not $items) { Write-Error "没有可上传的连接器"; exit 1 }
+
           Add-Type -AssemblyName System.IO.Compression.FileSystem
-          [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $out)).Entries | ForEach-Object { Write-Output "  $($_.FullName)" }
+
+          foreach ($item in $items) {
+            $parts = $item.Split(':')
+            $platform = $parts[0]
+            $connector = $parts[1]
+            $src = "dist\$platform\$connector"
+
+            if (-not (Test-Path $src)) { Write-Error "找不到 $src"; exit 1 }
+
+            # 命名含平台名，多平台时才不会撞车
+            $out = "$connector-connector-$platform-$tag.zip"
+            if (Test-Path $out) { Remove-Item $out -Force }
+            Compress-Archive -Path "$src\*" -DestinationPath $out -CompressionLevel Optimal
+
+            Write-Output "生成 $out  ($([math]::Round((Get-Item $out).Length/1KB,1)) KB)"
+            Write-Output "--- 包内文件 ---"
+            [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $out)).Entries |
+              ForEach-Object { Write-Output "  $($_.FullName)" }
+          }
 
       - name: 上传到 GitHub Release
         uses: softprops/action-gh-release@v2
@@ -189,7 +207,7 @@ jobs:
             dist-offline/*.zip
             dist/*.whl
             dist/*.tar.gz
-            zwcad-mcp-connector-*.zip
+            *-connector-*.zip
           generate_release_notes: true
           body: |
             ## 安装方式
@@ -209,7 +227,7 @@ jobs:
             | `*-offline.zip` | 完整运行环境 | 无 Python、无外网、不允许自行安装 |
             | `*.whl` | Python 安装包 | 有 Python 或 uv，且能访问 PyPI（或内网镜像） |
             | `*.tar.gz` | 源码包 | 需要自行构建时 |
-            | `zwcad-mcp-connector-*.zip` | WorkBuddy 连接器包 | 上传到 WorkBuddy 开放平台 |
+            | `zwcad-mcp-connector-<平台>-<版本>.zip` | 连接器包 | 上传到对应平台的开放市场 |
 
             > 所有产物版本号一致（均来自同一 tag）。连接器的
             > `connector-meta.json` 版本与 npm 上实际拉取的版本相同，
