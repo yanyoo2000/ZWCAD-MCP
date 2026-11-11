@@ -189,8 +189,12 @@ jobs:
 
             if (-not (Test-Path $src)) { Write-Error "找不到 $src"; exit 1 }
 
-            # 命名含平台名，多平台时才不会撞车
-            $out = "$connector-connector-$platform-$tag.zip"
+            # 命名统一为 <包名>-<版本>-<附加信息>，与 wheel 和离线包保持一致：
+            #   zwcad_mcp-1.2.0-py3-none-any.whl         （PEP 427 强制，包名-版本-…）
+            #   zwcad-mcp-1.2.0-win-x64-offline.zip      （包名-版本-平台-用途）
+            #   zwcad-mcp-1.2.0-connector-workbuddy.zip  （包名-版本-用途-平台）
+            # 版本号位置一致，同类附件天然按版本聚集。
+            $out = "$connector-$tag-connector-$platform.zip"
             if (Test-Path $out) { Remove-Item $out -Force }
             Compress-Archive -Path "$src\*" -DestinationPath $out -CompressionLevel Optimal
 
@@ -227,7 +231,7 @@ jobs:
             | `*-offline.zip` | 完整运行环境 | 无 Python、无外网、不允许自行安装 |
             | `*.whl` | Python 安装包 | 有 Python 或 uv，且能访问 PyPI（或内网镜像） |
             | `*.tar.gz` | 源码包 | 需要自行构建时 |
-            | `zwcad-mcp-connector-<平台>-<版本>.zip` | 连接器包 | 上传到对应平台的开放市场 |
+            | `zwcad-mcp-<版本>-connector-<平台>.zip` | 连接器包 | 上传到对应平台的开放市场 |
 
             > 所有产物版本号一致（均来自同一 tag）。连接器的
             > `connector-meta.json` 版本与 npm 上实际拉取的版本相同，
