@@ -65,11 +65,25 @@ CI 不写死平台名，而是执行 `node scripts/build-connector.js --list-upl
 拿到列表再逐个打包。**将来新增可上传平台时，只需在 `PLATFORMS` 里加一项
 并标 `uploadable: true`，workflow 不用改。**
 
-产物命名带平台名，避免多平台撞车：
+### 产物命名规则
+
+所有 Release 附件统一为 **`<包名>-<版本>-<附加信息>`**，版本号位置一致：
+
+| 附件 | 命名 | 谁定的 |
+|---|---|---|
+| `zwcad_mcp-1.2.0-py3-none-any.whl` | 包名-版本-解释器-ABI-平台 | **PEP 427 强制**，改了就装不上 |
+| `zwcad_mcp-1.2.0.tar.gz` | 包名-版本 | **sdist 规范** |
+| `zwcad-mcp-1.2.0-win-x64-offline.zip` | 包名-版本-平台-用途 | 我们定 |
+| `zwcad-mcp-1.2.0-connector-workbuddy.zip` | 包名-版本-用途-平台 | 我们定 |
+
+前两个是打包工具强制生成的，**不要试图改**。后两个可以按需要调整，
+但要保持「版本号紧跟包名」这个顺序——这样同类附件在多版本并存时
+会自然按版本聚集。
+
+新增附件类型时沿用同一规则，例如：
 
 ```
-zwcad-mcp-connector-workbuddy-1.2.0.zip
-zwcad-mcp-connector-<其他平台>-1.2.0.zip
+zwcad-mcp-1.2.0-connector-<其他平台>.zip
 ```
 
 ## 改动后必须做的四件事
@@ -258,7 +272,7 @@ CI 里有一道校验会逐一比对，任何一处与 tag 不符就失败。
 
 所以：
 
-- **不要手填版本号**。下载 Release 里的 `zwcad-mcp-connector-<平台>-<版本>.zip`，
+- **不要手填版本号**。下载 Release 里的 `zwcad-mcp-<版本>-connector-<平台>.zip`，
   它的 `connector-meta.json` 已经和该 tag 对齐。
 - 平台的表单如果要求填版本，填 tag 去掉 `v` 前缀后的部分（如 `v1.2.0` → `1.2.0`）。
 - 每次发版后重新下载最新的连接器包，不要复用旧的。
