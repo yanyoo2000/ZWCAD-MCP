@@ -125,23 +125,62 @@ jobs:
           python -m pip install --quiet --disable-pip-version-check build
           python -m build
 
+      # WorkBuddy 连接器包：可直接上传到开放平台的 zip。
+      # 平台审核会比对 connector-meta.json 的 version 与 mcp.json 实际拉取的版本，
+      # 两者不一致会被判定「声明版本与实际不符」而退回。所以这里打出的包
+      # 必须与 tag 同版本，下面有校验。
+      - name: 构建 WorkBuddy 连接器包
+        run: node scripts/build-connector.js
+
       - name: 校验产物
         shell: bash
         run: |
           TAG="${GITHUB_REF#refs/tags/v}"
+          echo "tag=$TAG"
+
           ZIP=$(ls dist-offline/*.zip | head -1)
-          echo "tag=$TAG zip=$ZIP"
+          echo "离线包: $ZIP"
           case "$ZIP" in
-            *"$TAG"*) echo "离线包版本一致" ;;
+            *"$TAG"*) echo "  OK 版本一致" ;;
             *) echo "::error::离线包版本与 tag ($TAG) 不一致"; exit 1 ;;
           esac
+
           WHEEL=$(ls dist/*.whl | head -1)
-          echo "wheel=$WHEEL"
+          echo "wheel: $WHEEL"
           case "$WHEEL" in
-            *"$TAG"*) echo "wheel 版本一致" ;;
+            *"$TAG"*) echo "  OK 版本一致" ;;
             *) echo "::error::wheel 版本与 tag ($TAG) 不一致"; exit 1 ;;
           esac
+
+          # 连接器包的版本藏在 connector-meta.json 里，必须单独查
+          META=$(ls dist/workbuddy/zwcad-mcp/connector-meta.json | head -1)
+          META_VER=$(node -p "require('./$META').version")
+          echo "连接器: $META -> $META_VER"
+          if [ "$META_VER" != "$TAG" ]; then
+            echo "::error::connector-meta.json 的 version ($META_VER) 与 tag ($TAG) 不一致"
+            exit 1
+          fi
+          echo "  OK 版本一致"
+
           ls -lh dist-offline/ dist/
+
+      # 打成单一 zip，方便直接上传到开放平台的发布表单。
+      # 平台要求包根目录下直接是 connector-meta.json / mcp.json / icon.png，
+      # 所以从 zwcad-mcp 目录内部打包，不要多套一层。
+      - name: 打包 WorkBuddy 连接器
+        shell: pwsh
+        run: |
+          $src = 'dist\workbuddy\zwcad-mcp'
+          if (-not (Test-Path $src)) { Write-Error "找不到 $src"; exit 1 }
+          $tag = $env:GITHUB_REF -replace '^refs/tags/v', ''
+          $out = "zwcad-mcp-connector-$tag.zip"
+          if (Test-Path $out) { Remove-Item $out -Force }
+          Compress-Archive -Path "$src\*" -DestinationPath $out -CompressionLevel Optimal
+          Write-Output "生成 $out"
+          Get-ChildItem $out | ForEach-Object { Write-Output ("  {0:N1} KB" -f ($_.Length/1KB)) }
+          Write-Output "--- 包内文件 ---"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $out)).Entries | ForEach-Object { Write-Output "  $($_.FullName)" }
 
       - name: 上传到 GitHub Release
         uses: softprops/action-gh-release@v2
@@ -150,6 +189,7 @@ jobs:
             dist-offline/*.zip
             dist/*.whl
             dist/*.tar.gz
+            zwcad-mcp-connector-*.zip
           generate_release_notes: true
           body: |
             ## 安装方式
@@ -161,6 +201,19 @@ jobs:
             | **uvx** | `uvx zwcad-mcp` |
             | 离线包 | 下载下方 `*-offline.zip`，解压即用 |
             | 本地 whl | 下载 `*.whl` 后 `uvx --from <文件路径> zwcad-mcp` |
+
+            ## Release 附件说明
+
+            | 文件 | 用途 | 使用前提 |
+            |---|---|---|
+            | `*-offline.zip` | 完整运行环境 | 无 Python、无外网、不允许自行安装 |
+            | `*.whl` | Python 安装包 | 有 Python 或 uv，且能访问 PyPI（或内网镜像） |
+            | `*.tar.gz` | 源码包 | 需要自行构建时 |
+            | `zwcad-mcp-connector-*.zip` | WorkBuddy 连接器包 | 上传到 WorkBuddy 开放平台 |
+
+            > 所有产物版本号一致（均来自同一 tag）。连接器的
+            > `connector-meta.json` 版本与 npm 上实际拉取的版本相同，
+            > 避免审核时出现「声明版本与实际不符」。
 
             ### 离线包说明
 

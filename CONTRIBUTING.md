@@ -199,6 +199,46 @@ python scripts/sync-version.py
 git tag v0.3.4 && git push origin v0.3.4
 ```
 
+打 tag 后会产出四个产物，**版本号全部来自同一个 tag**：
+
+| 产物 | 版本号写在 |
+|---|---|
+| npm 包 | `package.json` |
+| PyPI wheel / sdist | `pyproject.toml` |
+| 离线包 | 从 `package.json` 读取，文件名带版本 |
+| **WorkBuddy 连接器包** | **`connector-meta.json`** |
+
+CI 里有一道校验会逐一比对，任何一处与 tag 不符就失败。
+
+### 上传 WorkBuddy 连接器时注意版本对齐
+
+平台的审核会比对两件事：
+
+1. `connector-meta.json` 里声明的 `version`
+2. `mcp.json` 实际拉取的 npm 包版本
+
+**两者不一致会被判定「声明版本与实际不符」而退回。**
+
+踩过一次：提交表单时填的版本号与 npm 上实际存在的版本对不上
+（填了一个从未发布过的号），而 `mcp.json` 里 `npx -y zwcad-mcp` 拉到的是 npm 的
+`latest`，两者自然不符。
+
+所以：
+
+- **不要手填版本号**。下载 Release 里的 `zwcad-mcp-connector-<版本>.zip`，
+  它的 `connector-meta.json` 已经和该 tag 对齐。
+- 平台的表单如果要求填版本，填 tag 去掉 `v` 前缀后的部分（如 `v1.2.0` → `1.2.0`）。
+- 每次发版后重新下载最新的连接器包，不要复用旧的。
+
+> `mcp.json` 里写的是 `npx -y zwcad-mcp`（不带版本号），所以它总是拉 npm 上的
+> `latest`。这意味着**连接器包必须与 npm 上的 latest 同版本**——发版后要重新
+> 提交连接器，否则用户装到的版本会和声明的不一致。
+
+> **版本号规则的变更**：从 `1.2.0` 起，项目版本号改为 `1.x` 线
+> （此前是 `0.3.x`）。`1.2.0` 与 `0.3.13` 是**同一天的相邻发布**，
+> 前者只是版本号重编号，不含额外功能变更。npm 与 PyPI 上仍保留 `0.1.x ~ 0.3.x`
+> 的历史版本，用户固定版本时注意区分。
+
 ### 发布失败怎么补救
 
 **关键：不要重打已有 tag。** tag 已存在时重打会冲突，且 npm 会报版本重复。
