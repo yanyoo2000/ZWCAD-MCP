@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import atexit
 import time
 from typing import Any
 
@@ -63,9 +64,10 @@ class TelemetryMiddleware(Middleware):
     只在同步段做一次追加写，不 fsync、不发网络（设计方案第 2 节）。
     """
 
-    def __init__(self, cfg: TelemetryConfig, reporter: Reporter) -> None:
+    def __init__(self, cfg: TelemetryConfig, reporter: Reporter, writer: store.EventWriter) -> None:
         self._cfg = cfg
         self._reporter = reporter
+        self._writer = writer
         self._pending = 0
 
     async def on_call_tool(self, context: MiddlewareContext, call_next):
@@ -123,7 +125,7 @@ class TelemetryMiddleware(Middleware):
 
     def _record(self, tool: str, ok: bool) -> None:
         """落一行文件，必要时触发异步上报。"""
-        store.append_event(self._cfg.events_file, tool, ok)
+        self._writer.append(tool, ok)
 
         self._pending += 1
         if self._pending >= FLUSH_THRESHOLD:
@@ -141,14 +143,17 @@ def install(mcp, version: str, channel: str) -> TelemetryConfig:
     cfg = resolve()
     log_disabled_once(cfg)
 
-    if not cfg.enabled:
-        # 关闭时也挂中间件，但中间件里第一行就返回，
-        # 保证行为与「没装中间件」完全一致。
-        reporter = Reporter(cfg, version, channel)
-        mcp.add_middleware(TelemetryMiddleware(cfg, reporter))
-        return cfg
+    # 无论开关如何都创建 writer：关闭时不追加数据，但保持结构一致，
+    # 也便于将来「运行中改成开启」的扩展。
+    writer = store.EventWriter(cfg.events_file)
+    # 进程退出时最后刷一次，把内存缓冲里可能残留的数据落盘。
+    # atexit 对 SIGKILL 无效，但能覆盖正常退出与 SIGTERM。
+    atexit.register(writer.close)
 
-    reporter = Reporter(cfg, version, channel)
-    mcp.add_middleware(TelemetryMiddleware(cfg, reporter))
-    reporter.start()
+    reporter = Reporter(cfg, version, channel, writer)
+    mcp.add_middleware(TelemetryMiddleware(cfg, reporter, writer))
+
+    if cfg.enabled:
+        reporter.start()
+
     return cfg

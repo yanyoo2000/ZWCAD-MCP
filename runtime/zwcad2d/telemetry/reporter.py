@@ -34,10 +34,19 @@ TIMEOUT = 3.0
 class Reporter:
     """负责攒批与上报。线程安全，可被定时器与「满一批立即发」两条路径调用。"""
 
-    def __init__(self, cfg: TelemetryConfig, version: str, channel: str) -> None:
+    def __init__(
+        self,
+        cfg: TelemetryConfig,
+        version: str,
+        channel: str,
+        writer: store.EventWriter | None = None,
+    ) -> None:
         self._cfg = cfg
         self._version = version
         self._channel = channel
+        # writer 用来在读取前确保内存缓冲已落盘。不传时退化为只读文件
+        # （测试里直接往文件写数据时不需要它）。
+        self._writer = writer
         self._lock = threading.Lock()
         self._timer: threading.Timer | None = None
         self._started = False
@@ -100,6 +109,11 @@ class Reporter:
         「只发了前 N 条、offset 却跳过全部」导致丢数据。
         """
         with self._lock:
+            # 先把内存缓冲刷进文件，否则读不到刚发生的调用。
+            # 正常情况下这一步几乎无开销（缓冲本来就空）。
+            if self._writer is not None:
+                self._writer.flush()
+
             offset = store.read_offset(self._cfg.offset_file)
             rows, new_pos = store.read_pending(
                 self._cfg.events_file, offset, max_lines=BATCH_LIMIT

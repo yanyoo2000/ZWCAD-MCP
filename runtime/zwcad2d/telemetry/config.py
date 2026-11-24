@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -91,11 +92,19 @@ def _endpoint() -> str | None:
 
 
 def _state_dir() -> Path:
-    """本地状态目录。TELEMETRY_STATE_DIR 可覆盖，主要给测试用。"""
+    """本地状态目录。TELEMETRY_STATE_DIR 可覆盖，主要给测试用。
+
+    Path.home() 在部分环境下会抛 RuntimeError（服务账户没有 home、
+    精简容器没设 HOME、域账户配置文件只读）。这时退回系统临时目录，
+    而不是让整个统计功能失效——临时目录重启会清空，但总比完全不工作好。
+    """
     raw = os.environ.get("TELEMETRY_STATE_DIR")
     if raw:
         return Path(raw)
-    return Path.home() / ".zwcad-mcp"
+    try:
+        return Path.home() / ".zwcad-mcp"
+    except RuntimeError:
+        return Path(tempfile.gettempdir()) / "zwcad-mcp"
 
 
 def resolve() -> TelemetryConfig:

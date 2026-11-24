@@ -24,6 +24,16 @@ from zwcad2d.telemetry.config import resolve  # noqa: E402
 from zwcad2d.telemetry.reporter import Reporter, _platform_tag  # noqa: E402
 
 
+def write_event(events_file: Path, tool: str, ok: bool) -> None:
+    """测试辅助：写一条记录并立即关闭句柄。
+
+    用完就关，避免测试之间共享文件句柄导致 flush 时机不确定。
+    """
+    w = store.EventWriter(events_file)
+    w.append(tool, ok)
+    w.close()
+
+
 class TestSwitches(unittest.TestCase):
     """四道开关必须串联：任何一关关闭就立即停止，后面的关不执行。"""
 
@@ -131,8 +141,8 @@ class TestStore(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_append_and_read(self):
-        store.append_event(self.events, "zwcad_draw_line", True)
-        store.append_event(self.events, "zwcad_draw_line", False)
+        write_event(self.events, "zwcad_draw_line", True)
+        write_event(self.events, "zwcad_draw_line", False)
 
         rows, pos = store.read_pending(self.events, 0)
         self.assertEqual(len(rows), 2)
@@ -142,7 +152,7 @@ class TestStore(unittest.TestCase):
         self.assertGreater(pos, 0)
 
     def test_offset_prevents_reread(self):
-        store.append_event(self.events, "t1", True)
+        write_event(self.events, "t1", True)
         rows, pos = store.read_pending(self.events, 0)
         self.assertEqual(len(rows), 1)
 
@@ -153,7 +163,7 @@ class TestStore(unittest.TestCase):
 
     def test_partial_line_not_consumed(self):
         """最后一行没写完时不能被消费，否则会丢数据。"""
-        store.append_event(self.events, "t1", True)
+        write_event(self.events, "t1", True)
         # 记录完整行的字节数
         full_size = self.events.stat().st_size
 
@@ -167,7 +177,7 @@ class TestStore(unittest.TestCase):
 
     def test_offset_beyond_file_resets(self):
         """文件被清空后 offset 超过文件大小，应从头读。"""
-        store.append_event(self.events, "t1", True)
+        write_event(self.events, "t1", True)
         _, pos = store.read_pending(self.events, 0)
         self.events.write_text("", encoding="utf-8")
 
@@ -198,6 +208,96 @@ class TestStore(unittest.TestCase):
         out = store.aggregate(rows)
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]["tool"], "t1")
+
+
+class TestEventWriter(unittest.TestCase):
+    """写入器的核心保证：快、不丢、无权限时降级到内存。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.path = Path(self._tmp.name) / "events.jsonl"
+
+    def test_data_reaches_os_without_close(self):
+        """不用 close，数据也必须已到操作系统（SIGKILL 才不丢）。
+
+        这验证的是行缓冲。若用 8KB 块缓冲，数据会留在 Python 内存里，
+        进程被 SIGKILL 时丢失——而那正是本方案要避免的。
+        """
+        w = store.EventWriter(self.path)
+        self.addCleanup(w.close)
+
+        for i in range(5):
+            w.append(f"tool_{i}", True)
+
+        # 不调用 close/flush，直接看文件大小
+        self.assertTrue(self.path.exists(), "文件应已创建")
+        size = self.path.stat().st_size
+        self.assertGreater(size, 0, "数据应已落盘，不能留在 Python 缓冲里")
+
+        lines = self.path.read_text(encoding="utf-8").strip().split("\n")
+        self.assertEqual(len(lines), 5)
+
+    def test_buffer_empty_when_file_writable(self):
+        """正常情况内存缓冲应为空——写完即清。"""
+        w = store.EventWriter(self.path)
+        self.addCleanup(w.close)
+
+        for _ in range(100):
+            w.append("t1", True)
+
+        self.assertEqual(w.pending, 0, "文件可写时不应在内存里攒数据")
+
+    def test_fallback_to_memory_when_not_writable(self):
+        """文件不可写时，数据留在内存，且不抛异常。"""
+        bad = Path(r"C:\Windows\System32\config\__zwcad_test_nope") / "e.jsonl"
+        w = store.EventWriter(bad)
+
+        # 关键：不能抛异常，否则会打断工具调用
+        for i in range(3):
+            w.append(f"tool_{i}", True)
+
+        self.assertFalse(bad.exists())
+        self.assertEqual(w.pending, 3, "写不进文件时应留在内存")
+
+    def test_recovery_writes_back_buffered(self):
+        """文件恢复可写后，内存里积压的数据要补写回去。"""
+        bad = Path(r"C:\Windows\System32\config\__zwcad_test_nope2") / "e.jsonl"
+        w = store.EventWriter(bad)
+
+        for i in range(3):
+            w.append(f"tool_{i}", True)
+        self.assertEqual(w.pending, 3)
+
+        # 模拟权限恢复：换到可写路径
+        w._path = self.path
+        w.append("after", True)
+        w.flush()
+
+        lines = self.path.read_text(encoding="utf-8").strip().split("\n")
+        self.assertEqual(len(lines), 4, "3 条积压 + 1 条新的都应写入")
+        self.assertTrue(any("tool_0" in line for line in lines), "积压数据不能丢")
+        self.assertEqual(w.pending, 0)
+
+    def test_buffer_has_upper_bound(self):
+        """长期不可写时内存不能无限增长，超出上限丢最旧的。"""
+        bad = Path(r"C:\Windows\System32\config\__zwcad_test_nope3") / "e.jsonl"
+        limit = 10
+        w = store.EventWriter(bad, max_buffer=limit)
+
+        for i in range(limit * 3):
+            w.append(f"tool_{i}", True)
+
+        self.assertEqual(w.pending, limit, f"内存缓冲应被限制在 {limit} 条")
+        # 保留的应是最新的（旧的被挤出）
+        self.assertTrue(any(f"tool_{limit * 3 - 1}" in line for line in w._buffer))
+
+    def test_close_is_idempotent(self):
+        """重复 close 不应报错。"""
+        w = store.EventWriter(self.path)
+        w.append("t1", True)
+        w.close()
+        w.close()  # 第二次应无害
 
 
 class TestReporter(unittest.TestCase):
@@ -231,7 +331,7 @@ class TestReporter(unittest.TestCase):
             with patch.dict(os.environ, {"TELEMETRY_STATE_DIR": td}, clear=True):
                 cfg = resolve()
                 r = Reporter(cfg, "1.0.0", "npm")
-                store.append_event(cfg.events_file, "t1", True)
+                write_event(cfg.events_file, "t1", True)
 
                 with patch.object(r, "_post", return_value=False):
                     r._flush_once()
@@ -246,7 +346,7 @@ class TestReporter(unittest.TestCase):
             with patch.dict(os.environ, {"TELEMETRY_STATE_DIR": td}, clear=True):
                 cfg = resolve()
                 r = Reporter(cfg, "1.0.0", "npm")
-                store.append_event(cfg.events_file, "t1", True)
+                write_event(cfg.events_file, "t1", True)
 
                 with patch.object(r, "_post", return_value=True):
                     r._flush_once()
@@ -269,7 +369,7 @@ class TestReporter(unittest.TestCase):
 
                 total = BATCH_LIMIT + 100
                 for i in range(total):
-                    store.append_event(cfg.events_file, f"tool_{i}", True)
+                    write_event(cfg.events_file, f"tool_{i}", True)
 
                 sent: list[int] = []
 
