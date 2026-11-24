@@ -27,3 +27,10 @@ Thumbs.db
 # 离线包构建产物
 dist-offline/
 .offline-cache/
+
+# 临时文件（曾误提交过 _msg.txt）
+_msg.txt
+_tmp*
+_*.py
+_*.txt
+_*.mjs
