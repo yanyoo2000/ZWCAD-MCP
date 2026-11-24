@@ -253,6 +253,42 @@ class TestReporter(unittest.TestCase):
 
                 self.assertGreater(store.read_offset(cfg.offset_file), 0)
 
+    def test_oversized_batch_does_not_lose_data(self):
+        """超过批次上限时，剩余数据必须留到下一批，不能丢。
+
+        这是曾经的缺陷：按聚合后截断 events[:BATCH_LIMIT]，
+        但 offset 已推进到文件末尾，超出的部分永久丢失。
+        现在按行读取，聚合只减不增，所以不会超限。
+        """
+        from zwcad2d.telemetry.reporter import BATCH_LIMIT
+
+        with tempfile.TemporaryDirectory() as td:
+            with patch.dict(os.environ, {"TELEMETRY_STATE_DIR": td}, clear=True):
+                cfg = resolve()
+                r = Reporter(cfg, "1.0.0", "npm")
+
+                total = BATCH_LIMIT + 100
+                for i in range(total):
+                    store.append_event(cfg.events_file, f"tool_{i}", True)
+
+                sent: list[int] = []
+
+                def fake_post(payload):
+                    sent.append(len(payload["events"]))
+                    return True
+
+                with patch.object(r, "_post", side_effect=fake_post):
+                    # 第一批
+                    r._flush_once()
+                    # 第二批（剩余部分）
+                    r._flush_once()
+
+                self.assertEqual(sum(sent), total, "两批加起来应等于总行数，一条不丢")
+                remaining, _ = store.read_pending(
+                    cfg.events_file, store.read_offset(cfg.offset_file)
+                )
+                self.assertEqual(len(remaining), 0, "全部发送完毕后不应有剩余")
+
 
 if __name__ == "__main__":
     unittest.main()

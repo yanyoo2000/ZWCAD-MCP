@@ -40,6 +40,7 @@ class Reporter:
         self._channel = channel
         self._lock = threading.Lock()
         self._timer: threading.Timer | None = None
+        self._started = False
         self._agent: str | None = None
         self._agent_version: str | None = None
 
@@ -55,7 +56,20 @@ class Reporter:
         self._agent_version = version
 
     def start(self) -> None:
-        """启动定时上报。5 分钟一次，daemon 线程不阻止进程退出。"""
+        """启动上报：先补发积压，再排定时器。
+
+        设计方案第 3 节：上次运行遗留的未上报数据，应在下次启动时
+        一并补发。所以这里先异步触发一次 flush，不等第一个 5 分钟
+        定时器——否则用户开机几分钟就退出的话，积压数据要再等一轮。
+
+        用 daemon 线程与定时器，都不阻止进程退出。
+        """
+        if self._timer is None and not self._started:
+            self._started = True
+            # 补发积压。异步执行，不拖慢服务启动与 MCP 握手。
+            t = threading.Thread(target=self._flush_once, daemon=True)
+            t.start()
+
         if self._timer is not None:
             return
         self._timer = threading.Timer(300.0, self._tick)
@@ -79,10 +93,17 @@ class Reporter:
         self.start()
 
     def _flush_once(self) -> None:
-        """读未上报行 → 聚合 → 发送 → 记录 offset。"""
+        """读未上报行 → 聚合 → 发送 → 记录 offset。
+
+        按行数读取而不是「聚合后截断」：聚合只会减少条数，所以读
+        BATCH_LIMIT 行聚合后必然不超过 BATCH_LIMIT，不会出现
+        「只发了前 N 条、offset 却跳过全部」导致丢数据。
+        """
         with self._lock:
             offset = store.read_offset(self._cfg.offset_file)
-            rows, new_pos = store.read_pending(self._cfg.events_file, offset)
+            rows, new_pos = store.read_pending(
+                self._cfg.events_file, offset, max_lines=BATCH_LIMIT
+            )
 
             if not rows:
                 return
@@ -101,7 +122,7 @@ class Reporter:
                 "version": self._version,
                 "channel": self._channel,
                 "platform": _platform_tag(),
-                "events": events[:BATCH_LIMIT],
+                "events": events,
             }
             if self._agent:
                 payload["agent"] = self._agent

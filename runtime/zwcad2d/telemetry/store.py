@@ -24,10 +24,6 @@ from pathlib import Path
 # 同一进程内多线程写文件要串行化。MCP 服务可能有并发请求。
 _lock = threading.Lock()
 
-# 单条记录的行数上限保护：正常情况下文件不会超过这个规模，
-# 超过说明上报长期失败（比如端点配错），此时截断避免无限增长。
-MAX_LINES = 50_000
-
 
 def _now() -> tuple[str, str, int]:
     """返回 (ISO 时间戳, 本地日期, 本地小时)。
@@ -86,11 +82,15 @@ def write_offset(offset_file: Path, pos: int) -> None:
         pass
 
 
-def read_pending(events_file: Path, offset: int) -> tuple[list[dict], int]:
+def read_pending(events_file: Path, offset: int, max_lines: int | None = None) -> tuple[list[dict], int]:
     """读取 offset 之后的记录。
 
     返回 (记录列表, 新的字节位置)。新位置是「成功解析到的最后一行末尾」，
     这样解析失败的行会被下次重试，而不是跳过。
+
+    max_lines 限制一次读多少行。调用方应传批次上限——
+    聚合只会减少条数，所以读 N 行聚合后必然 ≤ N 条，
+    不会出现「发出去了但 offset 越过了未发的行」导致丢数据。
 
     文件被截断（比如用户手动清空）时，offset 可能超过文件大小，
     此时从头读。
@@ -110,7 +110,6 @@ def read_pending(events_file: Path, offset: int) -> tuple[list[dict], int]:
         with open(events_file, "rb") as f:
             f.seek(offset)
             while True:
-                start = f.tell()
                 line = f.readline()
                 if not line:
                     break
@@ -119,13 +118,12 @@ def read_pending(events_file: Path, offset: int) -> tuple[list[dict], int]:
                     break
                 try:
                     rows.append(json.loads(line.decode("utf-8")))
-                    new_pos = f.tell()
                 except (json.JSONDecodeError, UnicodeDecodeError):
                     # 坏行跳过，但位置前移，避免卡住整条链路
-                    new_pos = f.tell()
-                if len(rows) >= MAX_LINES:
+                    pass
+                new_pos = f.tell()
+                if max_lines is not None and len(rows) >= max_lines:
                     break
-                _ = start
     except OSError:
         return [], offset
 
