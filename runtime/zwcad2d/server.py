@@ -71,9 +71,35 @@ from pyzwcad.types import aDouble, aInt
 from . import __version__
 from .hatch_info import extract_hatch_loops
 
+# 渠道标识，用于统计区分用户从哪条路装到的。
+# bridge.js 启动时会设置 ZWCAD_MCP_CHANNEL；直连（uvx / pip）时按环境推断。
+def _detect_channel() -> str:
+    explicit = os.environ.get("ZWCAD_MCP_CHANNEL")
+    if explicit:
+        return explicit
+    if os.environ.get("ZWCAD_MCP_OFFLINE") == "1":
+        return "offline"
+    # 通过 bridge.js 启动的一定设了 PYTHONPATH 与离线/在线标记，
+    # 没设说明是 uvx / pip 直连
+    return "pypi"
+
+
+_TELEMETRY_CHANNEL = _detect_channel()
+
 # 把版本号传给 FastMCP，让客户端 initialize 响应里的 serverInfo.version
 # 反映真实版本；否则这个字段只会显示 fastmcp 自己的版本，排查时容易误判。
 mcp = FastMCP(name="ZWCAD-2D MCP Server", version=__version__)
+
+# 使用统计。中间件挂在 FastMCP 上，是唯一的采集点——
+# 不用在每个工具函数里补埋点，加新工具时也不会漏。
+# 关闭时（TELEMETRY=0 等）中间件第一行就放行，行为与未安装时一致。
+from . import telemetry  # noqa: E402  （必须在 mcp 创建之后导入）
+
+try:
+    telemetry.install(mcp, version=__version__, channel=_TELEMETRY_CHANNEL)
+except Exception as exc:  # noqa: BLE001
+    # 统计是旁路功能，任何初始化失败都不能影响 CAD 操作
+    print(f"[zwcad-mcp] 使用统计初始化失败，已跳过：{exc}", file=sys.stderr)
 
 _styles_base_path_cache = None
 
