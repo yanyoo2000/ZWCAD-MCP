@@ -107,6 +107,10 @@ class Reporter:
         按行数读取而不是「聚合后截断」：聚合只会减少条数，所以读
         BATCH_LIMIT 行聚合后必然不超过 BATCH_LIMIT，不会出现
         「只发了前 N 条、offset 却跳过全部」导致丢数据。
+
+        重发时复用上次的 batchId 与结束位置：服务端 events 的唯一索引
+        是 (batch_id, tool, ok, day, hour)，含 batch_id。换新号重发会被
+        当成新数据再插一遍，调用数翻倍。
         """
         with self._lock:
             # 先把内存缓冲刷进文件，否则读不到刚发生的调用。
@@ -114,10 +118,20 @@ class Reporter:
             if self._writer is not None:
                 self._writer.flush()
 
-            offset = store.read_offset(self._cfg.offset_file)
-            rows, new_pos = store.read_pending(
-                self._cfg.events_file, offset, max_lines=BATCH_LIMIT
-            )
+            state = store.read_state(self._cfg.offset_file)
+            resend_end = state.resend_end
+
+            if resend_end is not None:
+                # 上次发出但未确认：严格重发同一区间、复用同一批次号
+                rows, new_pos = store.read_pending(
+                    self._cfg.events_file, state.pos, max_lines=BATCH_LIMIT, end_pos=resend_end
+                )
+                batch_id = state.pending_batch_id
+            else:
+                rows, new_pos = store.read_pending(
+                    self._cfg.events_file, state.pos, max_lines=BATCH_LIMIT
+                )
+                batch_id = uuid.uuid4().hex
 
             if not rows:
                 return
@@ -128,7 +142,6 @@ class Reporter:
                 store.write_offset(self._cfg.offset_file, new_pos)
                 return
 
-            batch_id = uuid.uuid4().hex
             payload = {
                 "schema": 1,
                 "batchId": batch_id,
@@ -146,9 +159,17 @@ class Reporter:
             ok = self._post(payload)
 
             if ok:
-                # 只有成功才推进 offset。失败时数据留在文件里，
-                # 下次启动或下次定时器会重发。
+                # 成功：推进位置，并清掉未确认批次号
                 store.write_offset(self._cfg.offset_file, new_pos)
+            else:
+                # 失败：位置不动，记住批次号与结束位置，
+                # 下次原样重发同一区间
+                store.write_offset(
+                    self._cfg.offset_file,
+                    state.pos,
+                    pending_batch_id=batch_id,
+                    pending_end_pos=new_pos,
+                )
 
     def _post(self, payload: dict[str, Any]) -> bool:
         """发一个批次。返回是否成功。

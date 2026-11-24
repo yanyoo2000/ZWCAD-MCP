@@ -353,6 +353,89 @@ class TestReporter(unittest.TestCase):
 
                 self.assertGreater(store.read_offset(cfg.offset_file), 0)
 
+    def test_retry_reuses_batch_id(self):
+        """重发必须复用同一 batchId。
+
+        服务端 events 的唯一索引是 (batch_id, tool, ok, day, hour)，
+        含 batch_id。换新号重发不会冲突，同一批数据会被重复插入，
+        查询时调用数翻倍。
+        """
+        with tempfile.TemporaryDirectory() as td:
+            with patch.dict(os.environ, {"TELEMETRY_STATE_DIR": td}, clear=True):
+                cfg = resolve()
+                r = Reporter(cfg, "1.0.0", "npm")
+                write_event(cfg.events_file, "t1", True)
+
+                seen: list[str] = []
+
+                def fail_post(payload):
+                    seen.append(payload["batchId"])
+                    return False
+
+                with patch.object(r, "_post", side_effect=fail_post):
+                    r._flush_once()  # 第一次失败
+
+                with patch.object(r, "_post", side_effect=lambda p: (seen.append(p["batchId"]), True)[1]):
+                    r._flush_once()  # 重发，应复用
+
+                self.assertEqual(len(seen), 2)
+                self.assertEqual(seen[0], seen[1], "重发的 batchId 必须与首次一致")
+
+    def test_retry_does_not_mix_new_lines(self):
+        """重发时严格只发上次那批，不能把期间新追加的行混进来。
+
+        否则同一批次号下内容变了，服务端按 (batch_id, tool, ok, day, hour)
+        去重时会把新增的计数误删。
+        """
+        with tempfile.TemporaryDirectory() as td:
+            with patch.dict(os.environ, {"TELEMETRY_STATE_DIR": td}, clear=True):
+                cfg = resolve()
+                r = Reporter(cfg, "1.0.0", "npm")
+
+                # 第一批：3 条
+                for _ in range(3):
+                    write_event(cfg.events_file, "t1", True)
+
+                counts: list[int] = []
+
+                def fail_post(payload):
+                    counts.append(sum(e["count"] for e in payload["events"]))
+                    return False
+
+                with patch.object(r, "_post", side_effect=fail_post):
+                    r._flush_once()
+
+                # 期间又追加 5 条
+                for _ in range(5):
+                    write_event(cfg.events_file, "t1", True)
+
+                with patch.object(r, "_post", side_effect=lambda p: (counts.append(sum(e["count"] for e in p["events"])), True)[1]):
+                    r._flush_once()  # 重发：应仍然只发原来那 3 条
+
+                self.assertEqual(counts[0], 3, "首次应发 3 条")
+                self.assertEqual(counts[1], 3, "重发也只应发原来那 3 条，不能混入新追加的 5 条")
+
+                # 再发一次，才轮到新增的 5 条
+                with patch.object(r, "_post", side_effect=lambda p: (counts.append(sum(e["count"] for e in p["events"])), True)[1]):
+                    r._flush_once()
+                self.assertEqual(counts[2], 5, "第二批应是剩余的 5 条")
+
+    def test_success_clears_pending_batch(self):
+        """成功后要清掉未确认批次号，下一批用新号。"""
+        with tempfile.TemporaryDirectory() as td:
+            with patch.dict(os.environ, {"TELEMETRY_STATE_DIR": td}, clear=True):
+                cfg = resolve()
+                r = Reporter(cfg, "1.0.0", "npm")
+                write_event(cfg.events_file, "t1", True)
+
+                with patch.object(r, "_post", return_value=False):
+                    r._flush_once()
+                self.assertIsNotNone(store.read_state(cfg.offset_file).pending_batch_id)
+
+                with patch.object(r, "_post", return_value=True):
+                    r._flush_once()
+                self.assertIsNone(store.read_state(cfg.offset_file).pending_batch_id)
+
     def test_oversized_batch_does_not_lose_data(self):
         """超过批次上限时，剩余数据必须留到下一批，不能丢。
 

@@ -19,6 +19,7 @@ import json
 import os
 import threading
 from collections import deque
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -145,30 +146,92 @@ class EventWriter:
         return self._fh
 
 
-def read_offset(offset_file: Path) -> int:
-    """读取已消费的字节位置。读不到就当 0（从头开始）。"""
+@dataclass
+class OffsetState:
+    """上报进度。
+
+    pos              已确认消费到的字节位置
+    pending_batch_id 已发出但未确认的批次号；非空表示下次要重发同一批
+    pending_end_pos  那一批数据的结束位置；重发时严格读到这个位置，
+                     避免把期间新追加的行混进同一批次
+    """
+
+    pos: int = 0
+    pending_batch_id: str | None = None
+    pending_end_pos: int = 0
+
+    @property
+    def resend_end(self) -> int | None:
+        """需要重发时返回那批的结束位置，否则 None。"""
+        if self.pending_batch_id and self.pending_end_pos > self.pos:
+            return self.pending_end_pos
+        return None
+
+
+def read_state(offset_file: Path) -> OffsetState:
+    """读取进度状态。读不到或损坏就当全新开始。"""
     try:
         with open(offset_file, encoding="utf-8") as f:
             data = json.load(f)
-        pos = data.get("pos", 0)
-        return pos if isinstance(pos, int) and pos >= 0 else 0
     except (OSError, json.JSONDecodeError):
-        return 0
+        return OffsetState()
+
+    pos = data.get("pos", 0)
+    if not isinstance(pos, int) or pos < 0:
+        pos = 0
+
+    bid = data.get("pendingBatchId")
+    if not (isinstance(bid, str) and bid):
+        bid = None
+
+    end = data.get("pendingEndPos", 0)
+    if not isinstance(end, int) or end <= pos:
+        end = 0
+        if bid is not None and end == 0:
+            # 有批次号却没有结束位置，状态不一致，丢弃批次号重新生成
+            bid = None
+
+    return OffsetState(pos=pos, pending_batch_id=bid, pending_end_pos=end)
 
 
-def write_offset(offset_file: Path, pos: int) -> None:
-    """记录消费位置。先写临时文件再 rename，避免写到一半断电损坏。"""
+def write_state(offset_file: Path, state: OffsetState) -> None:
+    """写进度状态。先写临时文件再 rename，避免写到一半断电损坏。"""
     try:
         offset_file.parent.mkdir(parents=True, exist_ok=True)
         tmp = offset_file.with_suffix(".tmp")
+        payload: dict = {"pos": state.pos}
+        if state.pending_batch_id:
+            payload["pendingBatchId"] = state.pending_batch_id
+            payload["pendingEndPos"] = state.pending_end_pos
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"pos": pos}, f)
+            json.dump(payload, f)
         os.replace(tmp, offset_file)
     except OSError:
         pass
 
 
-def read_pending(events_file: Path, offset: int, max_lines: int | None = None) -> tuple[list[dict], int]:
+def read_offset(offset_file: Path) -> int:
+    """只读已消费位置。"""
+    return read_state(offset_file).pos
+
+
+def write_offset(offset_file: Path, pos: int, pending_batch_id: str | None = None,
+                 pending_end_pos: int = 0) -> None:
+    """写进度。pending_batch_id 非空表示这批已发出但未确认。"""
+    write_state(offset_file, OffsetState(pos, pending_batch_id, pending_end_pos))
+
+
+def read_pending_batch_id(offset_file: Path) -> str | None:
+    """读取未确认批次的批次号。"""
+    return read_state(offset_file).pending_batch_id
+
+
+def read_pending(
+    events_file: Path,
+    offset: int,
+    max_lines: int | None = None,
+    end_pos: int | None = None,
+) -> tuple[list[dict], int]:
     """读取 offset 之后的记录。
 
     返回 (记录列表, 新的字节位置)。新位置是「成功解析到的最后一行末尾」，
@@ -177,6 +240,10 @@ def read_pending(events_file: Path, offset: int, max_lines: int | None = None) -
     max_lines 限制一次读多少行。调用方应传批次上限——
     聚合只会减少条数，所以读 N 行聚合后必然 ≤ N 条，
     不会出现「发出去了但 offset 越过了未发的行」导致丢数据。
+
+    end_pos 限定读到哪个字节位置为止。重发「已发出但未确认」的批次时
+    必须传它，否则期间新追加的行会混进同一批次——同一批次号下内容变了，
+    服务端按 (batch_id, tool, ok, day, hour) 去重时会误删新增的计数。
 
     文件被截断（比如用户手动清空）时，offset 可能超过文件大小，
     此时从头读。
@@ -189,13 +256,15 @@ def read_pending(events_file: Path, offset: int, max_lines: int | None = None) -
     if offset > size:
         offset = 0
 
+    limit = size if end_pos is None or end_pos > size else end_pos
+
     rows: list[dict] = []
     new_pos = offset
 
     try:
         with open(events_file, "rb") as f:
             f.seek(offset)
-            while True:
+            while f.tell() < limit:
                 line = f.readline()
                 if not line:
                     break
