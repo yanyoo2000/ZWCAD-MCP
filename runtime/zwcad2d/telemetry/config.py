@@ -23,7 +23,7 @@ from pathlib import Path
 # 它只是一个接收匿名计数的公开接口，不需要凭据（凭据会把客户端卡住）。
 #
 # 内网/自建环境用 TELEMETRY_ENDPOINT 覆盖，例如指向自己的实例。
-DEFAULT_ENDPOINT = "https://web.zwcad.com/v1/events"
+DEFAULT_ENDPOINT = "https://web.zwcad.com/zwcad-mcp/v1/events"
 
 # 配置文件位置。个人长期关闭统计时改这里。
 CONFIG_PATH = Path.home() / ".zwcad-mcp" / "telemetry.json"
