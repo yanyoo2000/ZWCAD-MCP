@@ -17,8 +17,13 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-# 占位域名。部署时改成实际地址，或用 TELEMETRY_ENDPOINT 覆盖。
-DEFAULT_ENDPOINT = "https://telemetry.example.com/v1/events"
+# 正式上报端点。
+#
+# 客户端必须知道往哪发，所以地址写在公开代码里是设计使然，不是泄露——
+# 它只是一个接收匿名计数的公开接口，不需要凭据（凭据会把客户端卡住）。
+#
+# 内网/自建环境用 TELEMETRY_ENDPOINT 覆盖，例如指向自己的实例。
+DEFAULT_ENDPOINT = "https://web.zwcad.com/v1/events"
 
 # 配置文件位置。个人长期关闭统计时改这里。
 CONFIG_PATH = Path.home() / ".zwcad-mcp" / "telemetry.json"
