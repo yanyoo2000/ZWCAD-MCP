@@ -233,7 +233,11 @@ def get_cad_connection(require_mechanical: bool = False, create_if_not_exists: b
             if require_mechanical and _cad_conn_cache[1] is None:
                 mechanical_class = _load_mechanical_class()
                 if mechanical_class is not None:
-                    _cad_conn_cache = (_cad_conn_cache[0], mechanical_class())
+                    active_app = _cad_conn_cache[0].app
+                    try:
+                        _cad_conn_cache = (_cad_conn_cache[0], mechanical_class(cad_app=active_app))
+                    except Exception as exc:
+                        logger.info("未连接机械扩展，继续提供平台工具: %s", exc)
             return _cad_conn_cache
         except Exception:
             _cad_conn_cache = None
@@ -245,8 +249,11 @@ def get_cad_connection(require_mechanical: bool = False, create_if_not_exists: b
     mech_conn = None
     mechanical_class = _load_mechanical_class() if require_mechanical else None
     if mechanical_class is not None:
+        # 先经由 zcad_conn.app 获取活动 CAD（严格遵守 create_if_not_exists），
+        # 避免 ZwCADMech(cad_app=None) 在无活动实例时越权 CreateObject 拉起进程导致卡死。
+        active_app = zcad_conn.app
         try:
-            mech_conn = mechanical_class()
+            mech_conn = mechanical_class(cad_app=active_app)
         except Exception as exc:
             # 普通 ZWCAD 环境没有机械模块时，平台工具仍应保持可用。
             logger.info("未连接机械扩展，继续提供平台工具: %s", exc)
@@ -3343,7 +3350,7 @@ def _collect_zwcad_2d_capabilities(probe_cad: bool = True) -> dict:
     if probe_cad:
         try:
             zcad_conn, mech_conn = get_cad_connection()
-            app = _safe_attr(zcad_conn, "app")
+            app = zcad_conn.app
             doc = _safe_attr(zcad_conn, "doc")
             app_name = _safe_attr(app, "Name") or _safe_attr(app, "Caption")
             full_name = _safe_attr(app, "FullName")
