@@ -473,5 +473,66 @@ class TestReporter(unittest.TestCase):
                 self.assertEqual(len(remaining), 0, "全部发送完毕后不应有剩余")
 
 
+class TestFastMCPMiddlewareIntegration(unittest.IsolatedAsyncioTestCase):
+    """用真实 FastMCP + Client 验证中间件提取工具名、成败与 clientInfo。"""
+
+    async def test_real_fastmcp_tool_name_and_result_status(self):
+        from fastmcp import Client, FastMCP
+        from mcp.types import Implementation
+        from zwcad2d.telemetry import middleware
+
+        mcp = FastMCP("test-telemetry")
+
+        @mcp.tool
+        def ok_with_null_error() -> dict:
+            return {"ok": True, "error": None, "data": "fine"}
+
+        @mcp.tool
+        def fail_with_error_dict() -> dict:
+            return {"error": "something failed", "code": "ERR"}
+
+        @mcp.tool
+        def fail_with_exception() -> dict:
+            raise RuntimeError("boom")
+
+        with tempfile.TemporaryDirectory() as td:
+            with patch.dict(
+                os.environ,
+                {"TELEMETRY_STATE_DIR": td, "TELEMETRY_ENDPOINT": "https://example.invalid/events"},
+                clear=True,
+            ):
+                cfg = resolve()
+                writer = store.EventWriter(cfg.events_file)
+                reporter = middleware.Reporter(cfg, "1.2.1", "npm", writer)
+                mcp.add_middleware(middleware.TelemetryMiddleware(cfg, reporter, writer))
+
+                async with Client(
+                    mcp,
+                    client_info=Implementation(name="Antigravity-QA", version="2.0.0"),
+                ) as client:
+                    await client.call_tool("ok_with_null_error", {})
+                    await client.call_tool("fail_with_error_dict", {})
+                    with self.assertRaises(Exception):
+                        await client.call_tool("fail_with_exception", {})
+
+                writer.close()
+
+                rows = [
+                    json.loads(line)
+                    for line in cfg.events_file.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+                self.assertEqual(
+                    [(r["tool"], r["ok"]) for r in rows],
+                    [
+                        ("ok_with_null_error", True),
+                        ("fail_with_error_dict", False),
+                        ("fail_with_exception", False),
+                    ],
+                )
+                self.assertEqual(reporter._agent, "Antigravity-QA")
+                self.assertEqual(reporter._agent_version, "2.0.0")
+
+
 if __name__ == "__main__":
     unittest.main()

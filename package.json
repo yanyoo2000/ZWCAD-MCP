@@ -12,7 +12,7 @@
     "bridge.js",
     "lib/",
     "tools.json",
-    "runtime/zwcad2d/*.py",
+    "runtime/zwcad2d/**/*.py",
     "pyproject.toml",
     "README.md",
     "LICENSE",

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import atexit
+import json
 import time
 from typing import Any
 
@@ -30,30 +31,42 @@ def _is_failure(result: Any) -> bool:
     """判断调用是否失败。
 
     设计方案第 2 节的成败判据：
-      调用抛异常，或返回体含 error 字段，都记失败。
+      调用抛异常，或返回体含有效 error 字段 / ok=False，都记失败。
       不能只看异常——现有工具大量以 {"error": ...} 返回。
     """
-    # FastMCP 的 ToolResult 有多种形态，逐层探
-    content = getattr(result, "content", None)
+    if getattr(result, "isError", False) or getattr(result, "is_error", False):
+        return True
 
-    # 结构化输出（dict）优先看
-    structured = getattr(result, "structuredContent", None)
+    # FastMCP 2.x 的 ToolResult 使用 structured_content（同时兼容 structuredContent）
+    structured = getattr(result, "structured_content", None)
+    if structured is None:
+        structured = getattr(result, "structuredContent", None)
     if isinstance(structured, dict):
         if structured.get("error"):
             return True
         if structured.get("ok") is False:
             return True
+        return False
 
-    # 文本内容里找 JSON 形态的 error
+    # 无结构化输出时，从文本内容解析 JSON 判断（避免把 "error": null 误判为失败）
+    content = getattr(result, "content", None)
     if content:
         for item in content:
             text = getattr(item, "text", None)
             if not isinstance(text, str):
                 continue
-            # 只做轻量判断：不解析完整 JSON，避免在大响应上耗 CPU
             stripped = text.strip()
-            if stripped.startswith("{") and '"error"' in stripped[:200]:
-                return True
+            if not stripped.startswith("{"):
+                continue
+            try:
+                parsed = json.loads(stripped)
+            except ValueError:
+                continue
+            if isinstance(parsed, dict):
+                if parsed.get("error"):
+                    return True
+                if parsed.get("ok") is False:
+                    return True
 
     return False
 
@@ -100,7 +113,8 @@ class TelemetryMiddleware(Middleware):
         """
         if self._cfg.enabled:
             try:
-                params = context.message.params  # type: ignore[attr-defined]
+                msg = context.message
+                params = getattr(msg, "params", msg)
                 info = getattr(params, "clientInfo", None)
                 if info is not None:
                     self._reporter.set_agent(
@@ -115,8 +129,13 @@ class TelemetryMiddleware(Middleware):
 
     def _tool_name(self, context: MiddlewareContext) -> str:
         try:
-            params = context.message.params  # type: ignore[attr-defined]
-            name = getattr(params, "name", None)
+            # FastMCP 2.10+ 的 on_call_tool 直接传 CallToolRequestParams（有 .name），
+            # 同时也兼容外层包了 Request.params 的形态。
+            msg = context.message
+            name = getattr(msg, "name", None)
+            if not isinstance(name, str) or not name:
+                params = getattr(msg, "params", None)
+                name = getattr(params, "name", None)
             if isinstance(name, str) and name:
                 return name
         except (AttributeError, TypeError):

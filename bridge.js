@@ -498,11 +498,18 @@ function startWithProxy() {
   if (offline) {
     log('以离线包模式启动（自带 Python 与依赖，不联网）');
   }
+  const extraEnv = {
+    ZWCAD_MCP_CHANNEL: process.env.ZWCAD_MCP_CHANNEL || (offline ? 'offline' : 'npm'),
+  };
+  if (offline) {
+    extraEnv.ZWCAD_MCP_OFFLINE = '1';
+  }
   createProxy({
     cwd: CONNECTOR_DIR,
     version: pkgVersion(),
     childArgs: ['-m', ENTRY_MODULE],
     log,
+    extraEnv,
     // 离线包需要把 pywin32 的分散目录一起注入，否则 import pythoncom 失败
     extraPythonPath: offline ? offlinePythonPath : undefined,
     ensureRuntime: async () => {
