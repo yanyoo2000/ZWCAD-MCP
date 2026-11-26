@@ -299,6 +299,8 @@ Cursor 的 .cursor/mcp.json、或 WorkBuddy 的连接器配置）。
       "env": {
         "PYTHONUTF8": "1",
         "PYTHONNOUSERSITE": "1",
+        "ZWCAD_MCP_OFFLINE": "1",
+        "ZWCAD_MCP_CHANNEL": "offline",
         "PYTHONPATH": "${winPath}\\\\site-packages;${winPath}\\\\site-packages\\\\win32\\\\lib;${winPath}\\\\site-packages\\\\win32;${winPath}\\\\site-packages\\\\pywin32_system32;${winPath}\\\\python;${winPath}\\\\runtime"
       }
     }

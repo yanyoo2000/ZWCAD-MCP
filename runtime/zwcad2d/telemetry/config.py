@@ -73,13 +73,33 @@ def _config_disabled() -> bool:
     return data.get("enabled") is False
 
 
-def _is_offline_bundle() -> bool:
+def _has_offline_bundle_layout(module_file: str | Path | None = None) -> bool:
+    """根据目录结构识别是否处于离线包内部。
+
+    即使未经过 bridge.js（例如无 Node.js 环境直接调用便携 Python），
+    只要源码位于 `<root>/runtime/zwcad2d/telemetry/config.py`，且包根目录
+    存在构建清单 `bundle-info.json`，或同时包含 `python/python.exe` 与
+    `site-packages/`，即视为运行在离线包内。
+    """
+    cfg_path = Path(module_file or __file__).resolve()
+    if len(cfg_path.parents) < 4 or cfg_path.parents[2].name != "runtime":
+        return False
+    root = cfg_path.parents[3]
+    if (root / "bundle-info.json").is_file():
+        return True
+    return (root / "python" / "python.exe").is_file() and (root / "site-packages").is_dir()
+
+
+def is_offline_bundle() -> bool:
     """当前是否运行在离线包里。
 
-    离线包自带 Python 与依赖，通过 bridge.js 设置的环境变量识别。
-    内网客户解压即用，不该默认上报——这是设计方案第 4 节第 3 关。
+    离线包自带 Python 与依赖，内网客户解压即用，不该默认上报——
+    这是设计方案第 4 节第 3 关。优先认 bridge.js 注入的环境变量，
+    同时通过目录结构自检兜底，防止绕过 bridge.js 直接运行 Python 时漏关。
     """
-    return os.environ.get("ZWCAD_MCP_OFFLINE") == "1"
+    if os.environ.get("ZWCAD_MCP_OFFLINE") == "1":
+        return True
+    return _has_offline_bundle_layout()
 
 
 def _offline_explicitly_enabled() -> bool:
@@ -126,7 +146,7 @@ def resolve() -> TelemetryConfig:
         return TelemetryConfig(False, "config-off", endpoint, state_dir)
 
     # 第 3 关：离线包默认关闭，除非显式开启
-    if _is_offline_bundle() and not _offline_explicitly_enabled():
+    if is_offline_bundle() and not _offline_explicitly_enabled():
         return TelemetryConfig(False, "offline-default-off", endpoint, state_dir)
 
     # 第 4 关：没有端点就不发（自建、本地调试场景）

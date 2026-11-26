@@ -119,6 +119,12 @@ zwcad_diagnose(probe_cad: true)
 从 [Releases](https://github.com/yanyoo2000/ZWCAD-MCP/releases) 下载
 `zwcad-mcp-<版本>-win-x64-offline.zip`，解压即用。
 
+## 使用统计
+
+用于改进工具稳定性，PyPI 版默认开启（离线包默认关闭）。仅上报随机匿名 `installId`、工具名、调用成败与按小时聚合次数、版本/平台与客户端名称；**不采集任何敏感信息**（不触碰图纸内容、文件路径、工具参数、返回值及个人/机器身份信息）。
+
+设环境变量 `TELEMETRY=0`（或在 `~/.zwcad-mcp/telemetry.json` 写 `{"enabled": false}`）可彻底关闭。
+
 ## 源码与反馈
 
 - 源码仓库：https://github.com/yanyoo2000/ZWCAD-MCP

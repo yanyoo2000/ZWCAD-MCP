@@ -77,7 +77,9 @@ def _detect_channel() -> str:
     explicit = os.environ.get("ZWCAD_MCP_CHANNEL")
     if explicit:
         return explicit
-    if os.environ.get("ZWCAD_MCP_OFFLINE") == "1":
+    from .telemetry.config import is_offline_bundle
+
+    if is_offline_bundle():
         return "offline"
     # 通过 bridge.js 启动的一定设了 PYTHONPATH 与离线/在线标记，
     # 没设说明是 uvx / pip 直连
@@ -319,6 +321,69 @@ def _require_typelib(action: str):
             hint_parts.append(f"错误详情: {tlb_err}")
         return {"error": f"{action}失败: ZwmToolKit 类型库未加载", "code": "TYPELIB_NOT_LOADED", "hint": " ".join(hint_parts)}
     return None
+
+
+def _require_mechanical_connection(action: str, require_typelib: bool = False, require_db: bool = True):
+    """获取并校验机械扩展连接，防止在普通 ZWCAD 平台版上产生假成功。"""
+    if require_typelib:
+        tlb_err = _require_typelib(action)
+        if tlb_err:
+            return None, None, tlb_err
+    zcad_conn, mech_conn = get_cad_connection(require_mechanical=True)
+    if mech_conn is None:
+        return None, None, {
+            "error": f"{action}失败: 当前 ZWCAD 实例未连接机械扩展",
+            "code": "MECHANICAL_NOT_AVAILABLE",
+            "hint": "请确认启动的是中望机械，并调用 zwcad_mech_diagnose 检查 ZwmToolKit。",
+        }
+    if require_db:
+        mech_conn.open_file("")
+    return zcad_conn, mech_conn, None
+
+
+def _is_model_space_layout(layout) -> bool:
+    """判断布局是否为模型空间（兼容无 ModelSpace 属性的 ZWCAD COM 接口）。"""
+    try:
+        ms = layout.ModelSpace
+        if ms is not None:
+            return bool(ms)
+    except Exception:
+        pass
+    try:
+        if layout.TabOrder == 0:
+            return True
+    except Exception:
+        pass
+    try:
+        return str(layout.Name).lower() == "model"
+    except Exception:
+        return False
+
+
+def _call_out_pair_method(com_obj, method_name: str, zcad_interface_name: str, *args):
+    """调用带 [out] 双数组返回值的 COM 方法（如 GetXData / GetXRecordData）。
+
+    comtypes 动态分派(dynamic=True)不支持仅传输入参数接收 [out] VARIANT，
+    会触发 DISP_E_BADPARAMCOUNT (-2147352562)；失败时自动提升为强类型接口重试。
+    """
+    try:
+        return getattr(com_obj, method_name)(*args)
+    except Exception as dynamic_exc:
+        raw_ptr = getattr(com_obj, "_comobj", com_obj)
+        try:
+            typed_obj = comtypes.client.GetBestInterface(raw_ptr)
+            return getattr(typed_obj, method_name)(*args)
+        except Exception:
+            pass
+        try:
+            from pyzwcad.api import ZCAD as _ZCAD
+            iface = getattr(_ZCAD, zcad_interface_name, None) if _ZCAD is not None else None
+            if iface is not None:
+                typed_obj = raw_ptr.QueryInterface(iface)
+                return getattr(typed_obj, method_name)(*args)
+        except Exception:
+            pass
+        raise dynamic_exc
 
 
 def _err(action: str, e: Exception) -> dict:
@@ -1876,13 +1941,13 @@ def zwcad_manage_view(action: str, name: str = None, params: dict = None) -> dic
             layouts = []
             for layout in zcad_conn.iter_layouts(skip_model=not p.get("include_model", False)):
                 layouts.append({"name": layout.Name, "tab_order": layout.TabOrder,
-                                "is_model_space": layout.ModelSpace})
+                                "is_model_space": _is_model_space_layout(layout)})
             return _ok("获取布局列表成功", data=layouts)
 
         elif action == "get_active_layout":
             layout = zcad_conn.doc.ActiveLayout
             info = {"name": layout.Name, "tab_order": layout.TabOrder,
-                    "is_model_space": layout.ModelSpace}
+                    "is_model_space": _is_model_space_layout(layout)}
             return _ok("获取活动布局成功", data=info)
 
         elif action == "add_layout":
@@ -2483,13 +2548,17 @@ def zwcad_get_app_info(scope: str = "cad") -> dict:
                     except Exception:
                         pass
             return _ok(data=info)
-        if scope.startswith("mech_") and mech_conn is None:
-            return {
-                "error": "当前 ZWCAD 实例未连接机械扩展",
-                "code": "MECHANICAL_NOT_AVAILABLE",
-                "hint": "请确认启动的是中望机械，并调用 zwcad_mech_diagnose 检查 ZwmToolKit。",
-            }
-        elif scope == "mech_version":
+        if scope.startswith("mech_"):
+            if mech_conn is None:
+                return {
+                    "error": "当前 ZWCAD 实例未连接机械扩展",
+                    "code": "MECHANICAL_NOT_AVAILABLE",
+                    "hint": "请确认启动的是中望机械，并调用 zwcad_mech_diagnose 检查 ZwmToolKit。",
+                }
+            tlb_err = _require_typelib(f"获取应用信息({scope})")
+            if tlb_err:
+                return tlb_err
+        if scope == "mech_version":
             return _ok(version=mech_conn.zwm_app.get_version())
         elif scope == "mech_cad_path":
             return _ok(path=mech_conn.zwm_app.get_cad_path())
@@ -2846,7 +2915,9 @@ def zwcad_mech_create_partlist() -> dict:
     命令格式为 _.ZwmPartlist（下划线=语言无关，点=强制内置命令）。
     """
     try:
-        _, mech_conn = get_cad_connection(require_mechanical=True)
+        _, mech_conn, err = _require_mechanical_connection("创建明细表", require_db=True)
+        if err:
+            return err
         mech_conn.zwm_app.send_command("_.ZwmPartlist\n")
         return _ok("成功创建明细表")
     except Exception as e:
@@ -2887,8 +2958,14 @@ def zwcad_mech_manage_db(action: str, params: dict = None) -> dict:
 def zwcad_mech_doc(action: str, file_path: str, template: str = None) -> dict:
     """中望机械文档操作。action: open|new|new_named(需template参数)。"""
     try:
-        _, mech_conn = get_cad_connection(require_mechanical=True)
+        _, mech_conn, err = _require_mechanical_connection(
+            f"机械文档操作({action})", require_typelib=True, require_db=False
+        )
+        if err:
+            return err
         if action == "open":
+            if not file_path or not os.path.exists(file_path):
+                return _err("机械文档操作(open)", FileNotFoundError(f"文件不存在: {file_path}"))
             mech_conn.zwm_app.open_doc(file_path)
             return _ok(f"成功打开文档: {file_path}")
         elif action == "new":
@@ -2956,7 +3033,9 @@ def zwcad_mech_insert_balloon(
     (Zwm_BalloonInsert (list <mode> (list ax ay az) (list sx sy sz) "text" seq_type leader))
     """
     try:
-        zcad_conn, _ = get_cad_connection()
+        zcad_conn, _, err = _require_mechanical_connection("插入球标", require_db=True)
+        if err:
+            return err
 
         if not (0 <= seq_type <= 6):
             return _err("插入球标", ValueError(f"序号类型 seq_type 必须为 0-6，当前值: {seq_type}"))
@@ -3110,7 +3189,21 @@ def zwcad_manage_dictionary(action: str, params: dict = None) -> dict:
             result = []
             for i in range(dicts.Count):
                 d = dicts.Item(i)
-                result.append({"name": d.Name, "count": d.Count})
+                name = None
+                for attr in ("Name", "ObjectName", "Handle"):
+                    try:
+                        val = getattr(d, attr)
+                        if val:
+                            name = str(val)
+                            break
+                    except Exception:
+                        continue
+                entry = {"index": i, "name": name or f"item_{i}"}
+                try:
+                    entry["count"] = d.Count
+                except Exception:
+                    pass
+                result.append(entry)
             return _ok(data=result)
 
         elif action == "add":
@@ -3165,7 +3258,7 @@ def zwcad_manage_dictionary(action: str, params: dict = None) -> dict:
         elif action == "get_xrecord":
             d = dicts.Item(p["dict_name"])
             xr = d.GetObject(p["keyword"])
-            types, values = xr.GetXRecordData()
+            types, values = _call_out_pair_method(xr, "GetXRecordData", "IZcadXRecord")
             type_list = list(types) if types else []
             value_list = list(values) if values else []
             return _ok(data={"types": type_list, "values": value_list})
@@ -3231,7 +3324,7 @@ def zwcad_manage_xdata(action: str, params: dict = None) -> dict:
 
         elif action == "get_xdata":
             obj = zcad_conn.doc.HandleToObject(p["handle"])
-            types, values = obj.GetXData(p["app_name"])
+            types, values = _call_out_pair_method(obj, "GetXData", "IZcadObject", p["app_name"])
             type_list = list(types) if types else []
             value_list = list(values) if values else []
             return _ok(data={"handle": p["handle"], "app_name": p["app_name"],

@@ -123,6 +123,55 @@ class TestSwitches(unittest.TestCase):
             cfg = resolve()
         self.assertTrue(cfg.enabled)
 
+    def test_offline_layout_bundle_info_disables_without_env(self):
+        """无 ZWCAD_MCP_OFFLINE 环境变量时，bundle-info.json 目录特征仍默认关闭。"""
+        root = Path(self._tmp.name) / "bundle"
+        fake_cfg = root / "runtime" / "zwcad2d" / "telemetry" / "config.py"
+        fake_cfg.parent.mkdir(parents=True)
+        fake_cfg.write_text("", encoding="utf-8")
+        (root / "bundle-info.json").write_text("{}", encoding="utf-8")
+
+        with patch("zwcad2d.telemetry.config.__file__", str(fake_cfg)):
+            with patch.dict(os.environ, self.env(), clear=True):
+                cfg = resolve()
+            self.assertFalse(cfg.enabled)
+            self.assertEqual(cfg.reason, "offline-default-off")
+
+            with patch.dict(os.environ, self.env({"TELEMETRY": "1"}), clear=True):
+                cfg_on = resolve()
+            self.assertTrue(cfg_on.enabled)
+
+    def test_offline_layout_python_and_site_packages_disables_without_env(self):
+        """即使删掉 bundle-info.json，只要便携 python 与 site-packages 存在仍视为离线包。"""
+        root = Path(self._tmp.name) / "bundle2"
+        fake_cfg = root / "runtime" / "zwcad2d" / "telemetry" / "config.py"
+        fake_cfg.parent.mkdir(parents=True)
+        fake_cfg.write_text("", encoding="utf-8")
+        (root / "python").mkdir()
+        (root / "python" / "python.exe").write_text("", encoding="utf-8")
+        (root / "site-packages").mkdir()
+
+        with patch("zwcad2d.telemetry.config.__file__", str(fake_cfg)):
+            with patch.dict(os.environ, self.env(), clear=True):
+                cfg = resolve()
+        self.assertFalse(cfg.enabled)
+        self.assertEqual(cfg.reason, "offline-default-off")
+
+    def test_site_packages_install_not_treated_as_offline(self):
+        """普通 site-packages 安装路径不能误判为离线包。"""
+        root = Path(self._tmp.name) / "venv"
+        fake_cfg = root / "site-packages" / "zwcad2d" / "telemetry" / "config.py"
+        fake_cfg.parent.mkdir(parents=True)
+        fake_cfg.write_text("", encoding="utf-8")
+        (root / "python").mkdir()
+        (root / "python" / "python.exe").write_text("", encoding="utf-8")
+
+        with patch("zwcad2d.telemetry.config.__file__", str(fake_cfg)):
+            with patch.dict(os.environ, self.env(), clear=True):
+                cfg = resolve()
+        self.assertTrue(cfg.enabled)
+        self.assertEqual(cfg.reason, "enabled")
+
     def test_no_endpoint_disables(self):
         with patch.dict(os.environ, self.env({"TELEMETRY_ENDPOINT": ""}), clear=True):
             cfg = resolve()

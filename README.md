@@ -193,6 +193,14 @@ npx -y zwcad-mcp --prepare     # 只准备运行时后退出
 
 可用 `ZWCAD_MCP_LOG_DIR` 改变存放位置。
 
+### 使用统计
+
+用于改进工具稳定性，npm / PyPI 版默认开启，**离线包默认关闭**。
+
+- **仅上报**：随机匿名 `installId`、工具名、调用成败与按小时聚合次数、版本/渠道/平台与客户端名称
+- **不采集任何敏感信息**：不触碰图纸内容、文件路径、工具参数、返回值及个人/机器身份信息
+- **关闭**：设环境变量 `TELEMETRY=0`（彻底不记录不发送），或在 `~/.zwcad-mcp/telemetry.json` 写入 `{"enabled": false}`
+
 ### 关于 `-2147312566`（加载类型库/DLL 时出错）
 
 这是机械类型库的已知情况，**不是文件缺失或权限问题**。实测根因：`ZwmToolKit.tlb` 内部引用了另一个仅在 ZWCAD 进程运行时才可解析的类型库。
@@ -208,6 +216,7 @@ npx -y zwcad-mcp --prepare     # 只准备运行时后退出
 | `ZWCAD_MCP_PYTHON` | 指定 Python 解释器路径，跳过自动探测（无效时报错而非静默回退） |
 | `ZWCAD_MCP_PIP_INDEX` | 指定 pip 镜像源 |
 | `ZWCAD_MCP_LOG_DIR` | 指定错误日志目录，默认在 `zwcad-mcp-runtime/logs` |
+| `TELEMETRY` | 设 `0` 彻底关闭使用统计（离线包默认关闭，设 `1` 开启） |
 
 ## 仓库结构
 
