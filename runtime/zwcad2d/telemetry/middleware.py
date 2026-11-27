@@ -121,9 +121,11 @@ class TelemetryMiddleware(Middleware):
                         getattr(info, "name", None),
                         getattr(info, "version", None),
                     )
+                else:
+                    self._reporter.set_agent(None, None)
             except (AttributeError, TypeError):
                 # 拿不到就算了，服务端会记为 unknown
-                pass
+                self._reporter.set_agent(None, None)
 
         return await call_next(context)
 
@@ -144,7 +146,8 @@ class TelemetryMiddleware(Middleware):
 
     def _record(self, tool: str, ok: bool) -> None:
         """落一行文件，必要时触发异步上报。"""
-        self._writer.append(tool, ok)
+        agent, agent_version = self._reporter.agent_info
+        self._writer.append(tool, ok, agent=agent, agent_version=agent_version)
 
         self._pending += 1
         if self._pending >= FLUSH_THRESHOLD:

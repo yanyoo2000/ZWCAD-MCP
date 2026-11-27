@@ -7,7 +7,7 @@
   不给程序任何收尾机会，所以不能靠「退出时上报」。
 
 文件格式：一行一条调用记录，JSON。
-  {"tool":"zwcad_draw_line","ok":true,"ts":"2026-11-24T09:05:12Z","day":"2026-11-24","hour":9}
+  {"tool":"zwcad_draw_line","ok":true,"ts":"2026-11-24T09:05:12Z","day":"2026-11-24","hour":9,"agent":"antigravity-client","agentVersion":"1.0.0"}
 
 offset.json 记录已消费到的字节位置。只记录位置而不是删文件，
 因为删文件会与并发写产生竞态：写到一半的文件被删，那条记录就丢了。
@@ -59,21 +59,31 @@ class EventWriter:
         self._lock = threading.Lock()
         self._buffer: deque[str] = deque(maxlen=max_buffer)
 
-    def append(self, tool: str, ok: bool) -> None:
+    def append(
+        self,
+        tool: str,
+        ok: bool,
+        agent: str | None = None,
+        agent_version: str | None = None,
+    ) -> None:
         """记录一次调用。
 
         先入内存（永不失败），再尝试落盘。任何 IOException 都吞掉——
         统计是旁路，不能因为写文件失败让工具调用报错。
         """
         ts, day, hour = _now()
-        line = (
-            json.dumps(
-                {"tool": tool, "ok": ok, "ts": ts, "day": day, "hour": hour},
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
-            + "\n"
-        )
+        record: dict[str, object] = {
+            "tool": tool,
+            "ok": ok,
+            "ts": ts,
+            "day": day,
+            "hour": hour,
+        }
+        if isinstance(agent, str) and agent:
+            record["agent"] = agent
+            if isinstance(agent_version, str) and agent_version:
+                record["agentVersion"] = agent_version
+        line = json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
 
         with self._lock:
             self._buffer.append(line)
@@ -226,11 +236,23 @@ def read_pending_batch_id(offset_file: Path) -> str | None:
     return read_state(offset_file).pending_batch_id
 
 
+def row_agent_key(row: dict) -> tuple[str | None, str | None]:
+    """提取单条事件记录归属的 (agent, agentVersion)。"""
+    agent = row.get("agent")
+    if not isinstance(agent, str) or not agent:
+        return None, None
+    ver = row.get("agentVersion")
+    if not isinstance(ver, str) or not ver:
+        ver = None
+    return agent, ver
+
+
 def read_pending(
     events_file: Path,
     offset: int,
     max_lines: int | None = None,
     end_pos: int | None = None,
+    split_by_agent: bool = False,
 ) -> tuple[list[dict], int]:
     """读取 offset 之后的记录。
 
@@ -244,6 +266,10 @@ def read_pending(
     end_pos 限定读到哪个字节位置为止。重发「已发出但未确认」的批次时
     必须传它，否则期间新追加的行会混进同一批次——同一批次号下内容变了，
     服务端按 (batch_id, tool, ok, day, hour) 去重时会误删新增的计数。
+
+    split_by_agent=True 且未指定 end_pos 时，只读取连续属于同一
+    (agent, agentVersion) 的一段，遇到不同调用方即停在上一行末尾，
+    以便跨会话积压拆批上报而不串台。
 
     文件被截断（比如用户手动清空）时，offset 可能超过文件大小，
     此时从头读。
@@ -260,6 +286,8 @@ def read_pending(
 
     rows: list[dict] = []
     new_pos = offset
+    unset = object()
+    batch_agent: object = unset
 
     try:
         with open(events_file, "rb") as f:
@@ -272,10 +300,21 @@ def read_pending(
                     # 最后一行还没写完（并发追加中），留到下次
                     break
                 try:
-                    rows.append(json.loads(line.decode("utf-8")))
+                    parsed = json.loads(line.decode("utf-8"))
                 except (json.JSONDecodeError, UnicodeDecodeError):
                     # 坏行跳过，但位置前移，避免卡住整条链路
-                    pass
+                    new_pos = f.tell()
+                    continue
+
+                if split_by_agent and end_pos is None and isinstance(parsed, dict):
+                    key = row_agent_key(parsed)
+                    if batch_agent is unset:
+                        batch_agent = key
+                    elif key != batch_agent:
+                        # 遇到不同调用方，停在上一行末尾，留待下一批处理
+                        break
+
+                rows.append(parsed)
                 new_pos = f.tell()
                 if max_lines is not None and len(rows) >= max_lines:
                     break

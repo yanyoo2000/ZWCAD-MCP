@@ -24,13 +24,19 @@ from zwcad2d.telemetry.config import resolve  # noqa: E402
 from zwcad2d.telemetry.reporter import Reporter, _platform_tag  # noqa: E402
 
 
-def write_event(events_file: Path, tool: str, ok: bool) -> None:
+def write_event(
+    events_file: Path,
+    tool: str,
+    ok: bool,
+    agent: str | None = None,
+    agent_version: str | None = None,
+) -> None:
     """测试辅助：写一条记录并立即关闭句柄。
 
     用完就关，避免测试之间共享文件句柄导致 flush 时机不确定。
     """
     w = store.EventWriter(events_file)
-    w.append(tool, ok)
+    w.append(tool, ok, agent=agent, agent_version=agent_version)
     w.close()
 
 
@@ -257,6 +263,24 @@ class TestStore(unittest.TestCase):
         out = store.aggregate(rows)
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]["tool"], "t1")
+
+    def test_split_by_agent_preserves_boundary(self):
+        """split_by_agent=True 时按连续同 (agent, agentVersion) 分段，不越过边界。"""
+        write_event(self.events, "legacy", True)
+        write_event(self.events, "a1", True, agent="claude-ai", agent_version="0.1.0")
+        write_event(self.events, "a2", False, agent="claude-ai", agent_version="0.1.0")
+        write_event(self.events, "b1", True, agent="codex-mcp-client", agent_version="0.171.0")
+
+        seg1, pos1 = store.read_pending(self.events, 0, split_by_agent=True)
+        seg2, pos2 = store.read_pending(self.events, pos1, split_by_agent=True)
+        seg3, pos3 = store.read_pending(self.events, pos2, split_by_agent=True)
+        seg4, pos4 = store.read_pending(self.events, pos3, split_by_agent=True)
+
+        self.assertEqual([r["tool"] for r in seg1], ["legacy"])
+        self.assertEqual([r["tool"] for r in seg2], ["a1", "a2"])
+        self.assertEqual([r["tool"] for r in seg3], ["b1"])
+        self.assertEqual(seg4, [])
+        self.assertEqual(pos3, pos4)
 
 
 class TestEventWriter(unittest.TestCase):
@@ -521,6 +545,128 @@ class TestReporter(unittest.TestCase):
                 )
                 self.assertEqual(len(remaining), 0, "全部发送完毕后不应有剩余")
 
+    def test_flush_uses_row_agent_without_initialize(self):
+        """启动后尚未 initialize 时补发，仍使用事件行自身的 agent，不退化成 unknown。"""
+        with tempfile.TemporaryDirectory() as td:
+            with patch.dict(os.environ, {"TELEMETRY_STATE_DIR": td}, clear=True):
+                cfg = resolve()
+                r = Reporter(cfg, "1.3.0", "pypi")
+                write_event(cfg.events_file, "t1", True, agent="claude-ai", agent_version="0.1.0")
+
+                seen: list[dict] = []
+
+                def fake_post(payload):
+                    seen.append(payload)
+                    return True
+
+                with patch.object(r, "_post", side_effect=fake_post):
+                    r._flush_once()
+
+                self.assertEqual(len(seen), 1)
+                self.assertEqual(seen[0].get("agent"), "claude-ai")
+                self.assertEqual(seen[0].get("agentVersion"), "0.1.0")
+
+    def test_flush_all_splits_mixed_agents_and_handles_partial_failure(self):
+        """积压混合多个调用方时拆批发送，第二批失败重发时不会重发第一批。"""
+        with tempfile.TemporaryDirectory() as td:
+            with patch.dict(os.environ, {"TELEMETRY_STATE_DIR": td}, clear=True):
+                cfg = resolve()
+                r = Reporter(cfg, "1.3.0", "pypi")
+                write_event(cfg.events_file, "t1", True, agent="claude-ai", agent_version="0.1.0")
+                write_event(cfg.events_file, "t2", True, agent="claude-ai", agent_version="0.1.0")
+                write_event(cfg.events_file, "t3", True, agent="codex-mcp-client", agent_version="0.2.0")
+
+                sent: list[dict] = []
+                attempt = {"n": 0}
+
+                def flaky_post(payload):
+                    sent.append(payload)
+                    attempt["n"] += 1
+                    # 第 1 批(claude-ai)成功，第 2 批(codex)首次失败、重试成功
+                    return attempt["n"] != 2
+
+                with patch.object(r, "_post", side_effect=flaky_post):
+                    r._flush_all()
+                    self.assertEqual(len(sent), 2)
+                    self.assertEqual(sent[0].get("agent"), "claude-ai")
+                    self.assertEqual(sent[1].get("agent"), "codex-mcp-client")
+                    # 重试第二批
+                    r._flush_all()
+
+                self.assertEqual(len(sent), 3)
+                self.assertEqual(sent[2].get("agent"), "codex-mcp-client")
+                self.assertEqual(sent[1]["batchId"], sent[2]["batchId"], "失败分段重试应复用自身 batchId")
+                self.assertNotEqual(sent[0]["batchId"], sent[1]["batchId"])
+
+    def test_start_waits_for_initialize_then_flushes_on_set_agent(self):
+        """start() 不在握手前裸奔补发；收到 set_agent() 后立刻触发且携带正确调用方。"""
+        import threading
+        import time
+
+        with tempfile.TemporaryDirectory() as td:
+            with patch.dict(os.environ, {"TELEMETRY_STATE_DIR": td}, clear=True):
+                cfg = resolve()
+                r = Reporter(cfg, "1.3.0", "pypi")
+                write_event(cfg.events_file, "legacy_tool", True)
+
+                done = threading.Event()
+                seen: list[dict] = []
+
+                def fake_post(payload):
+                    seen.append(payload)
+                    done.set()
+                    return True
+
+                with patch.object(r, "_post", side_effect=fake_post):
+                    r.start()
+                    try:
+                        time.sleep(0.05)
+                        self.assertEqual(len(seen), 0, "未收到 initialize 前不应抢跑发出老行")
+                        r.set_agent("antigravity-client", "v1.0.0")
+                        self.assertTrue(done.wait(timeout=2.0), "set_agent 后应立即异步补发")
+                        # 等后台线程完成 write_offset 释放锁后再退出临时目录
+                        with r._lock:
+                            pass
+                    finally:
+                        r.stop()
+
+                self.assertEqual(len(seen), 1)
+                self.assertEqual(seen[0].get("agent"), "antigravity-client")
+                self.assertEqual(seen[0].get("agentVersion"), "v1.0.0")
+
+    def test_start_fallback_timer_flushes_without_initialize(self):
+        """未收到 initialize 时，超过兜底等待时间仍应补发积压，不丢数据。"""
+        import threading
+        from zwcad2d.telemetry import reporter as reporter_mod
+
+        with tempfile.TemporaryDirectory() as td:
+            with patch.dict(os.environ, {"TELEMETRY_STATE_DIR": td}, clear=True):
+                cfg = resolve()
+                r = Reporter(cfg, "1.3.0", "pypi")
+                write_event(cfg.events_file, "direct_script_tool", True)
+
+                done = threading.Event()
+                seen: list[dict] = []
+
+                def fake_post(payload):
+                    seen.append(payload)
+                    done.set()
+                    return True
+
+                with patch.object(reporter_mod, "INITIAL_FLUSH_DELAY", 0.05):
+                    with patch.object(r, "_post", side_effect=fake_post):
+                        r.start()
+                        try:
+                            self.assertTrue(done.wait(timeout=2.0), "超时兜底定时器应触发补发")
+                            # 等后台线程完成 write_offset 释放锁后再退出临时目录
+                            with r._lock:
+                                pass
+                        finally:
+                            r.stop()
+
+                self.assertEqual(len(seen), 1)
+                self.assertIsNone(seen[0].get("agent"))
+
 
 class TestFastMCPMiddlewareIntegration(unittest.IsolatedAsyncioTestCase):
     """用真实 FastMCP + Client 验证中间件提取工具名、成败与 clientInfo。"""
@@ -578,6 +724,12 @@ class TestFastMCPMiddlewareIntegration(unittest.IsolatedAsyncioTestCase):
                         ("fail_with_error_dict", False),
                         ("fail_with_exception", False),
                     ],
+                )
+                self.assertTrue(
+                    all(
+                        r.get("agent") == "Antigravity-QA" and r.get("agentVersion") == "2.0.0"
+                        for r in rows
+                    )
                 )
                 self.assertEqual(reporter._agent, "Antigravity-QA")
                 self.assertEqual(reporter._agent_version, "2.0.0")
